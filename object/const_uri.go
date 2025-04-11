@@ -1,1 +1,5 @@
 package object
+
+var (
+	URIEmpty = ""
+)
