@@ -217,7 +217,7 @@ func NewProperty(
 }
 
 // NewPropertyFromMap creates a new property from a map
-func (p *property) NewPropertyFromMap(
+func NewPropertyFromMap(
 	uuider object.UUIDer,
 	value map[string]any,
 ) (Propertyer, error) {

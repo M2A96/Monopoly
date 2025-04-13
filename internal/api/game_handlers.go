@@ -2,82 +2,358 @@
 package api
 
 import (
+	"context"
 	"net/http"
-	"time"
-	"yourproject/internal/database"
 
+	"github/M2A96/Monopoly.git/config"
+	"github/M2A96/Monopoly.git/internal/core/domain/bo"
+	"github/M2A96/Monopoly.git/internal/core/ports/input"
+	"github/M2A96/Monopoly.git/log"
+	"github/M2A96/Monopoly.git/object"
+	"github/M2A96/Monopoly.git/util"
+
+	"go.opentelemetry.io/otel/codes"
+	"go.opentelemetry.io/otel/trace"
+
+	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
 )
 
-type CreateGameRequest struct {
-	Name string `json:"name"`
+type (
+	GameHandler interface {
+		GetGame(c echo.Context) error
+		StartGame(c echo.Context) error
+		GetGameState(c echo.Context) error
+		CreateGame(c echo.Context) error
+	}
+	gameHandler struct {
+		handler[input.GameServicer]
+	}
+
+	gameHandlerOptioner = handlerOptioner[input.GameServicer]
+)
+
+var (
+	_ Handler     = (*gameHandler)(nil)
+	_ GameHandler = (*gameHandler)(nil)
+)
+
+// NewGameHandler is a function.
+func NewGameHandler(
+	configConfigger config.Configger,
+	logRuntimeLogger log.RuntimeLogger,
+	objectUUIDer object.UUIDer,
+	traceTracer trace.Tracer,
+	optioner ...gameHandlerOptioner,
+) *gameHandler {
+	return &gameHandler{
+		handler: *NewHandler[input.GameServicer](
+			configConfigger,
+			logRuntimeLogger,
+			objectUUIDer,
+			traceTracer,
+			optioner...,
+		),
+	}
 }
 
-type GameResponse struct {
-	ID        int       `json:"id"`
-	Name      string    `json:"name"`
-	Status    string    `json:"status"`
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
+// WithGameHandlerGameServicer is a function.
+func WithGameHandlerGameServicer(
+	serviceGameServicer input.GameServicer,
+) gameHandlerOptioner {
+	return WithHandlerServicer[input.GameServicer](serviceGameServicer)
 }
 
-// Create a new game
-func createGame(db *database.DB) echo.HandlerFunc {
-	return func(c echo.Context) error {
-		// Parse request
-		req := new(CreateGameRequest)
-		if err := c.Bind(req); err != nil {
-			return c.JSON(http.StatusBadRequest, map[string]string{"error": "Invalid request format"})
-		}
+// CreateGame implements GameHandler.
+func (h *gameHandler) CreateGame(c echo.Context) error {
+	ctx := c.Request().Context()
+	ctxWT, ctxWTCancelFunc := context.WithTimeout(ctx, object.NUMHTTPServerTimeout)
+	defer ctxWTCancelFunc()
 
-		// Validate request
-		if req.Name == "" {
-			return c.JSON(http.StatusBadRequest, map[string]string{"error": "Game name is required"})
-		}
+	var traceSpan trace.Span
+	ctxWT, traceSpan = h.GetTracer().Start(
+		ctxWT,
+		"CreateGame",
+		trace.WithSpanKind(trace.SpanKindServer),
+	)
+	defer traceSpan.End()
 
-		// Create game in database
-		gameID, err := game.CreateGame(db, req.Name)
-		if err != nil {
-			return c.JSON(http.StatusInternalServerError, map[string]string{"error": "Failed to create game"})
-		}
+	utilRuntimeContext := util.NewRuntimeContext(ctxWT)
+	utilSpanContext := util.NewSpanContext(traceSpan)
+	fields := map[string]any{
+		"name":   "CreateGame",
+		"rt_ctx": utilRuntimeContext,
+		"sp_ctx": utilSpanContext,
+		"config": h.GetConfigger(),
+	}
 
-		// Get the created game
-		gameData, err := game.GetGame(db, gameID)
-		if err != nil {
-			return c.JSON(http.StatusInternalServerError, map[string]string{"error": "Failed to retrieve created game"})
-		}
+	h.GetRuntimeLogger().
+		WithFields(fields).
+		Info(object.URIEmpty)
 
-		// Return response
-		return c.JSON(http.StatusCreated, GameResponse{
-			ID:        gameData.ID,
-			Name:      gameData.Name,
-			Status:    gameData.Status,
-			CreatedAt: gameData.CreatedAt,
-			UpdatedAt: gameData.UpdatedAt,
+	// Parse request body
+	var game bo.Gamer
+	if err := c.Bind(&game); err != nil {
+		h.GetRuntimeLogger().
+			WithFields(fields).
+			WithField(object.URIFieldError, err).
+			Error("Failed to parse request body")
+		traceSpan.RecordError(err)
+		traceSpan.SetStatus(codes.Error, "Failed to parse request body")
+
+		return c.JSON(http.StatusBadRequest, map[string]string{
+			"error": "Invalid request format",
 		})
 	}
+
+	// Create game using service
+	newGameId, err := h.GetServicer().CreateGame(ctxWT, game)
+	if err != nil {
+		h.GetRuntimeLogger().
+			WithFields(fields).
+			WithField(object.URIFieldError, err).
+			Error(object.ErrGameServiceCreate.Error())
+		traceSpan.RecordError(err)
+		traceSpan.SetStatus(codes.Error, object.ErrGameServiceCreate.Error())
+
+		return c.JSON(http.StatusInternalServerError, map[string]string{
+			"error": "Failed to create game",
+		})
+	}
+
+	h.GetRuntimeLogger().
+		WithFields(fields).
+		WithField(object.URIFieldResponse, newGameId).
+		Debug(object.URIEmpty)
+
+	return c.JSON(http.StatusCreated, newGameId)
 }
 
-// Get game details
-func getGame(db *database.DB) echo.HandlerFunc {
-	return func(c echo.Context) error {
-		// Implementation will go here
-		return c.JSON(http.StatusNotImplemented, map[string]string{"status": "Not implemented yet"})
+// GetGame implements GameHandler.
+func (h *gameHandler) GetGame(c echo.Context) error {
+	ctx := c.Request().Context()
+	ctxWT, ctxWTCancelFunc := context.WithTimeout(ctx, object.NUMHTTPServerTimeout)
+	defer ctxWTCancelFunc()
+
+	var traceSpan trace.Span
+	ctxWT, traceSpan = h.GetTracer().Start(
+		ctxWT,
+		"GetGame",
+		trace.WithSpanKind(trace.SpanKindServer),
+	)
+	defer traceSpan.End()
+
+	utilRuntimeContext := util.NewRuntimeContext(ctxWT)
+	utilSpanContext := util.NewSpanContext(traceSpan)
+	fields := map[string]any{
+		"name":   "GetGame",
+		"rt_ctx": utilRuntimeContext,
+		"sp_ctx": utilSpanContext,
+		"config": h.GetConfigger(),
 	}
+
+	h.GetRuntimeLogger().
+		WithFields(fields).
+		Info(object.URIEmpty)
+
+	// Parse UUID from path parameter
+	idStr := c.Param("id")
+	id, err := h.GetUUIDer().Parse(idStr)
+	if err != nil {
+		h.GetRuntimeLogger().
+			WithFields(fields).
+			WithField(object.URIFieldError, err).
+			Error(object.ErrUUIDerParse.Error())
+		traceSpan.RecordError(err)
+		traceSpan.SetStatus(codes.Error, object.ErrUUIDerParse.Error())
+
+		return c.JSON(http.StatusBadRequest, map[string]string{
+			"error": "Invalid game ID format",
+		})
+	}
+
+	h.GetRuntimeLogger().
+		WithFields(fields).
+		WithField(object.URIFieldID, id).
+		Debug(object.URIEmpty)
+
+	// Call service to get game
+	game, err := h.GetServicer().Get(ctxWT, id)
+	if err != nil {
+		h.GetRuntimeLogger().
+			WithFields(fields).
+			WithField(object.URIFieldError, err).
+			Error(object.ErrGameServiceGet.Error())
+		traceSpan.RecordError(err)
+		traceSpan.SetStatus(codes.Error, object.ErrGameServiceGet.Error())
+
+		return c.JSON(http.StatusInternalServerError, map[string]string{
+			"error": "Failed to retrieve game",
+		})
+	}
+
+	// }
+	newGame := bo.NewGamer(
+		game.GetID(),
+		game.GetName(),
+		game.GetStatus(),
+		game.GetCurrentPlayerID(),
+		game.GetWinnerID(),
+	)
+
+	h.GetRuntimeLogger().
+		WithFields(fields).
+		WithField("response", newGame).
+		Debug(object.URIEmpty)
+
+	return c.JSON(http.StatusOK, newGame.GetMap())
 }
 
-// Start a game
-func startGame(db *database.DB) echo.HandlerFunc {
-	return func(c echo.Context) error {
-		// Implementation will go here
-		return c.JSON(http.StatusNotImplemented, map[string]string{"status": "Not implemented yet"})
+// GetGameState implements GameHandler.
+func (h *gameHandler) GetGameState(c echo.Context) error {
+	ctx := c.Request().Context()
+	ctxWT, ctxWTCancelFunc := context.WithTimeout(ctx, object.NUMHTTPServerTimeout)
+	defer ctxWTCancelFunc()
+
+	var traceSpan trace.Span
+	ctxWT, traceSpan = h.GetTracer().Start(
+		ctxWT,
+		"GetGameState",
+		trace.WithSpanKind(trace.SpanKindServer),
+	)
+	defer traceSpan.End()
+
+	utilRuntimeContext := util.NewRuntimeContext(ctxWT)
+	utilSpanContext := util.NewSpanContext(traceSpan)
+	fields := map[string]any{
+		"name":   "GetGameState",
+		"rt_ctx": utilRuntimeContext,
+		"sp_ctx": utilSpanContext,
+		"config": h.GetConfigger(),
 	}
+
+	h.GetRuntimeLogger().
+		WithFields(fields).
+		Info(object.URIEmpty)
+
+	// Parse game ID
+	idStr := c.Param("id")
+	id, err := uuid.Parse(idStr)
+	if err != nil {
+		h.GetRuntimeLogger().
+			WithFields(fields).
+			WithField(object.URIFieldError, err).
+			Error(object.ErrUUIDerParse.Error())
+		traceSpan.RecordError(err)
+		traceSpan.SetStatus(codes.Error, object.ErrUUIDerParse.Error())
+
+		return c.JSON(http.StatusBadRequest, map[string]string{
+			"error": "Invalid game ID format",
+		})
+	}
+
+	// Get game state using service
+	gameState, err := h.GetServicer().GetGameState(ctxWT, id)
+	if err != nil {
+		h.GetRuntimeLogger().
+			WithFields(fields).
+			WithField(object.URIFieldError, err).
+			Error(object.ErrGameServiceGetState.Error())
+		traceSpan.RecordError(err)
+		traceSpan.SetStatus(codes.Error, object.ErrGameServiceGetState.Error())
+
+		return c.JSON(http.StatusInternalServerError, map[string]string{
+			"error": "Failed to retrieve game state",
+		})
+	}
+
+	boGame := bo.NewGamer(
+		gameState.GetID(),
+		gameState.GetName(),
+		gameState.GetStatus(),
+		gameState.GetCurrentPlayerID(),
+		gameState.GetWinnerID(),
+	)
+
+	h.GetRuntimeLogger().
+		WithFields(fields).
+		WithField(object.URIFieldResponse, boGame).
+		Debug(object.URIEmpty)
+
+	return c.JSON(http.StatusOK, boGame.GetStatus())
 }
 
-// Get game state
-func getGameState(db *database.DB) echo.HandlerFunc {
-	return func(c echo.Context) error {
-		// Implementation will go here
-		return c.JSON(http.StatusNotImplemented, map[string]string{"status": "Not implemented yet"})
+// StartGame implements GameHandler.
+func (h *gameHandler) StartGame(c echo.Context) error {
+	ctx := c.Request().Context()
+	ctxWT, ctxWTCancelFunc := context.WithTimeout(ctx, object.NUMHTTPServerTimeout)
+	defer ctxWTCancelFunc()
+
+	var traceSpan trace.Span
+	ctxWT, traceSpan = h.GetTracer().Start(
+		ctxWT,
+		"StartGame",
+		trace.WithSpanKind(trace.SpanKindServer),
+	)
+	defer traceSpan.End()
+
+	utilRuntimeContext := util.NewRuntimeContext(ctxWT)
+	utilSpanContext := util.NewSpanContext(traceSpan)
+	fields := map[string]any{
+		"name":   "StartGame",
+		"rt_ctx": utilRuntimeContext,
+		"sp_ctx": utilSpanContext,
+		"config": h.GetConfigger(),
 	}
+
+	h.GetRuntimeLogger().
+		WithFields(fields).
+		Info(object.URIEmpty)
+
+	// Parse game ID
+	idStr := c.Param("id")
+	id, err := uuid.Parse(idStr)
+	if err != nil {
+		h.GetRuntimeLogger().
+			WithFields(fields).
+			WithField(object.URIFieldError, err).
+			Error("Invalid game ID format")
+		traceSpan.RecordError(err)
+		traceSpan.SetStatus(codes.Error, "Invalid game ID format")
+
+		return c.JSON(http.StatusBadRequest, map[string]string{
+			"error": "Invalid game ID format",
+		})
+	}
+
+	// Start game using service
+	err = h.GetServicer().StartGame(ctxWT, id)
+	if err != nil {
+		h.GetRuntimeLogger().
+			WithFields(fields).
+			WithField(object.URIFieldError, err).
+			Error(object.ErrGameServiceStart.Error())
+		traceSpan.RecordError(err)
+		traceSpan.SetStatus(codes.Error, object.ErrGameServiceStart.Error())
+
+		return c.JSON(http.StatusInternalServerError, map[string]string{
+			"error": "Failed to start game",
+		})
+	}
+
+	h.GetRuntimeLogger().
+		WithFields(fields).
+		Debug(object.URIEmpty)
+
+	return c.JSON(http.StatusOK, map[string]string{
+		"status": "Game started successfully",
+	})
+}
+
+// RegisterRoutes implements Handler.
+func (h *gameHandler) RegisterRoutes(e *echo.Echo) {
+	e.GET("/api/v1/games/:id", h.GetGame)
+	e.POST("/api/v1/games/:id/start", h.StartGame)
+	e.GET("/api/v1/games/:id/state", h.GetGameState)
+	e.POST("/api/v1/games", h.CreateGame)
 }

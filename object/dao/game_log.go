@@ -98,7 +98,7 @@ func NewGameLog(
 	}
 }
 
-func (gl *gameLog) NewGameLogFromMap(
+func NewGameLogFromMap(
 	uuider object.UUIDer,
 	value map[string]any,
 ) (GameLogger, error) {

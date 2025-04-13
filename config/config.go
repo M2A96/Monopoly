@@ -15,11 +15,11 @@ type (
 		// GetGoogleConfigger
 		GetHTTPConfigger
 		GetLogConfigger
-		// GetOtelConfigger
+		GetOtelConfigger
 		// GetPrometheusConfigger
 		// GetPyroscopeConfigger
 		// GetRedisConfigger
-		// GetRuntimeConfigger
+		GetRuntimeConfigger
 		GetServerConfigger
 	}
 
@@ -35,7 +35,7 @@ type (
 		// googleConfigger     GoogleConfigger
 		httpConfigger HTTPConfigger
 		logConfigger  LogConfigger
-		// otelConfigger       OtelConfigger
+		otelConfigger OtelConfigger
 		// prometheusConfigger PrometheusConfigger
 		// pyroscopeConfigger  PyroscopeConfigger
 		// redisConfigger      RedisConfigger
@@ -58,7 +58,7 @@ var (
 	// _ GetGoogleConfigger     = (*config)(nil)
 	_ GetHTTPConfigger = (*config)(nil)
 	_ GetLogConfigger  = (*config)(nil)
-	// _ GetOtelConfigger       = (*config)(nil)
+	_ GetOtelConfigger = (*config)(nil)
 	// _ GetPrometheusConfigger = (*config)(nil)
 	// _ GetPyroscopeConfigger  = (*config)(nil)
 	// _ GetRedisConfigger      = (*config)(nil)
@@ -166,15 +166,15 @@ func WithConfigLogConfigger(
 }
 
 // WithConfigOtelConfigger is a function.
-// func WithConfigOtelConfigger(
-// 	optioners ...otelConfigOptioner,
-// ) ConfigOptioner {
-// 	return configOptionerFunc(func(
-// 		config *config,
-// 	) {
-// 		config.otelConfigger = NewOtelConfig(optioners...)
-// 	})
-// }
+func WithConfigOtelConfigger(
+	optioners ...otelConfigOptioner,
+) ConfigOptioner {
+	return configOptionerFunc(func(
+		config *config,
+	) {
+		config.otelConfigger = NewOtelConfig(optioners...)
+	})
+}
 
 // WithConfigPODConfigger is a function.
 // Func WithConfigPODConfigger(
@@ -300,9 +300,9 @@ func (config *config) GetLogConfigger() LogConfigger {
 }
 
 // GetOtelConfigger is a function.
-// func (config *config) GetOtelConfigger() OtelConfigger {
-// 	return config.otelConfigger
-// }
+func (config *config) GetOtelConfigger() OtelConfigger {
+	return config.otelConfigger
+}
 
 // // GetPODConfigger is a function.
 // Func (config *config) GetPODConfigger() PODConfigger {
@@ -352,7 +352,7 @@ func (config *config) GetMap() map[string]any {
 		// "google_configger":     config.GetGoogleConfigger(),
 		"http_configger": config.GetHTTPConfigger(),
 		"log_configger":  config.GetLogConfigger(),
-		// "otel_configger":       config.GetOtelConfigger(),
+		"otel_configger": config.GetOtelConfigger(),
 		// "prometheus_configger": config.GetPrometheusConfigger(),
 		// "pyroscope_configger":  config.GetPyroscopeConfigger(),
 		// "redis_configger":      config.GetRedisConfigger(),

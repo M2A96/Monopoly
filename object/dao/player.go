@@ -39,6 +39,22 @@ type (
 	}
 )
 
+// GetMap implements object.GetMapper.
+func (p *player) GetMap() map[string]any {
+	return lo.Assign(
+		p.cuder.GetMap(),
+		p.cudIDer.GetMap(),
+		map[string]any{
+			"name":       p.GetName(),
+			"balance":    p.GetBalance(),
+			"position":   p.GetPosition(),
+			"in_jail":    p.GetInJail(),
+			"jail_turns": p.GetJailTurns(),
+			"bankrupt":   p.GetBankrupt(),
+			"game_id":    p.GetGameID(),
+		})
+}
+
 var (
 	_ Player           = (*player)(nil)
 	_ object.GetMapper = (*player)(nil)
@@ -116,7 +132,7 @@ func NewPlayer(
 	}
 }
 
-func (p *player) NewPlayerFromMap(
+func NewPlayerFromMap(
 	uuider object.UUIDer,
 	value map[string]any,
 ) (Player, error) {
@@ -186,20 +202,4 @@ func (p *player) NewPlayerFromMap(
 // MarshalJSON implements json.Marshaler.
 func (p *player) MarshalJSON() ([]byte, error) {
 	return json.Marshal(p.GetMap())
-}
-
-// GetMap implements object.GetMapper.
-func (p *player) GetMap() map[string]any {
-	return lo.Assign(
-		p.cuder.GetMap(),
-		p.cudIDer.GetMap(),
-		map[string]any{
-			"name":       p.GetName(),
-			"balance":    p.GetBalance(),
-			"position":   p.GetPosition(),
-			"in_jail":    p.GetInJail(),
-			"jail_turns": p.GetJailTurns(),
-			"bankrupt":   p.GetBankrupt(),
-			"game_id":    p.GetGameID(),
-		})
 }

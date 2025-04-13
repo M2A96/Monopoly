@@ -67,7 +67,7 @@ func NewGameStateFromMap(
 		return nil, object.ErrTypeAssertion
 	}
 
-	game, err := (&game{}).NewGamerFromMap(uuider, gameMap)
+	game, err := NewGamerFromMap(uuider, gameMap)
 	if err != nil {
 		return nil, err
 	}
@@ -84,7 +84,7 @@ func NewGameStateFromMap(
 			return nil, object.ErrTypeAssertion
 		}
 
-		player, err := (&player{}).NewPlayerFromMap(uuider, playerMap)
+		player, err := NewPlayerFromMap(uuider, playerMap)
 		if err != nil {
 			return nil, err
 		}
@@ -105,7 +105,7 @@ func NewGameStateFromMap(
 		}
 
 		// Use the existing NewPropertyFromMap function
-		prop, err := (&property{}).NewPropertyFromMap(uuider, propertyMap)
+		prop, err := NewPropertyFromMap(uuider, propertyMap)
 		if err != nil {
 			return nil, err
 		}

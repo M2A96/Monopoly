@@ -84,12 +84,12 @@ func (g *game) GetCUDer() CUDer {
 }
 
 func NewGame(
-	id uuid.UUID,
-	name string,
-	status string,
 	createdAt time.Time,
 	updatedAt time.Time,
 	deletedAt sql.NullTime,
+	id uuid.UUID,
+	name string,
+	status string,
 	currentPlayerID uuid.UUID,
 	winnerID uuid.UUID,
 ) *game {
@@ -105,7 +105,7 @@ func NewGame(
 	}
 }
 
-func (g *game) NewGamerFromMap(
+func NewGamerFromMap(
 	uuider object.UUIDer,
 	value map[string]any,
 ) (Gamer, error) {

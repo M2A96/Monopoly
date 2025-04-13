@@ -9,6 +9,7 @@ import (
 
 type (
 	Gamer interface {
+		BOer
 		GetName() string
 		GetStatus() string
 		GetCurrentPlayerID() uuid.UUID
@@ -16,6 +17,7 @@ type (
 	}
 
 	game struct {
+		bo
 		name            string
 		status          string
 		currentPlayerID uuid.UUID
@@ -30,12 +32,14 @@ var (
 )
 
 func NewGamer(
+	id uuid.UUID,
 	name string,
 	status string,
 	currentPlayerID uuid.UUID,
 	winnerID uuid.UUID,
 ) *game {
 	return &game{
+		bo:              *NewBO(id),
 		name:            name,
 		status:          status,
 		currentPlayerID: currentPlayerID,
