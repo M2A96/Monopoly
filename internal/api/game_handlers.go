@@ -187,7 +187,7 @@ func (h *gameHandler) GetGame(c echo.Context) error {
 		traceSpan.RecordError(err)
 		traceSpan.SetStatus(codes.Error, object.ErrGameServiceGet.Error())
 
-		return c.JSON(http.StatusInternalServerError, map[string]string{
+		return c.JSON(http.StatusNotFound, map[string]string{
 			"error": "Failed to retrieve game",
 		})
 	}

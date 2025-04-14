@@ -1,0 +1,15 @@
+{
+    "Servers": {
+      "1": {
+        "Group": "Servers",
+        "Host": "cockroach",
+        "MaintenanceDB": "defaultdb",
+        "Name": "cockroach",
+        "PassFile": "/pgadmin4/pass",
+        "Port": 26257,
+        "SSLMode": "disable",
+        "Username": "root"
+      }
+    }
+  }
+  

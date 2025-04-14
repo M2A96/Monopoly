@@ -1,11 +1,12 @@
 -- Create GAME table
 CREATE TABLE GAME (
-    game_id SERIAL PRIMARY KEY,
+    game_id UUID PRIMARY KEY,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    deleted_at TIMESTAMP,
     status VARCHAR(20) CHECK (status IN ('WAITING', 'IN_PROGRESS', 'COMPLETED')),
-    current_player_id INTEGER,
-    winner_id INTEGER
+    current_player_id UUID,
+    winner_id UUID
 );
 
 -- Create PLAYER table
