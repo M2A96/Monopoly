@@ -116,7 +116,6 @@ func (repository *propertyRepository) Create(
 
 	newProperty := dao.NewProperty(
 		id,
-		daoProperty.GetID(),
 		daoProperty.GetName(),
 		daoProperty.GetColorGroup(),
 		daoProperty.GetPrice(),
@@ -410,7 +409,6 @@ func (repository *propertyRepository) Update(
 
 	daoProperty := dao.NewProperty(
 		property.GetCUDIDer().GetID()["id"],
-		property.GetID(),
 		property.GetName(),
 		property.GetColorGroup(),
 		property.GetPrice(),

@@ -48,7 +48,13 @@ var (
 	ErrGameServiceGetState    = errors.New(
 		"failed to get game state",
 	)
-	ErrGameServiceStart = errors.New("failed to start game")
+	ErrPropertyServiceCreate          = errors.New("failed to create property")
+	ErrPropertyServiceGet             = errors.New("failed to get property")
+	ErrPropertyServiceUpdate          = errors.New("failed to update property")
+	ErrPropertyServiceUpdateOwnerShip = errors.New("failed to update property owner ship")
+	ErrPropertyServiceDelete          = errors.New("failed to delete property")
+	ErrPropertyServiceRead            = errors.New("failed to read property")
+	ErrGameServiceStart               = errors.New("failed to start game")
 
 	ErrJWKKeyParseKey  = errors.New("failed to parse key of jwk")
 	ErrJWKPublicKeyOf  = errors.New("failed to public key of jwk")
@@ -58,5 +64,9 @@ var (
 	ErrSQLDBFromGormDB = errors.New(
 		"failed to receive sql db from gorm db",
 	)
-	ErrSQLDBClose = errors.New("failed to close sql db")
+	ErrSQLDBClose                     = errors.New("failed to close sql db")
+	ErrPropertyServiceAlreadyHasHotel = errors.New("property already has a hotel")
+	ErrBase64Decode                   = errors.New("failed to decode base64")
+	ErrGobDecoderDecode               = errors.New("failed to decode gob decoder")
+	ErrPlayerHandlerDelete            = errors.New("player handler failed to delete player")
 )

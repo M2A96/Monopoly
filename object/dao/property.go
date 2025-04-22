@@ -16,7 +16,6 @@ type (
 		GetCUDer() CUDer
 		// GetCUDIDer is a function.
 		GetCUDIDer() CUDIDer
-		GetID() int
 		GetName() string
 		GetColorGroup() string
 		GetPrice() int
@@ -30,7 +29,7 @@ type (
 		GetRentWith4Houses() int
 		GetRentWithHotel() int
 		GetMortgageValue() int
-		GetOwnerID() *int
+		GetOwnerID() uuid.UUID
 		GetHouses() int
 		GetHasHotel() bool
 		GetMortgaged() bool
@@ -40,24 +39,23 @@ type (
 	property struct {
 		cuder            CUDer
 		cudIDer          CUDIDer
-		id               int    `json:"id"`
-		name             string `json:"name"`
-		colorGroup       string `json:"color_group"`
-		price            int    `json:"price"`
-		housePrice       int    `json:"house_price"`
-		hotelPrice       int    `json:"hotel_price"`
-		rent             int    `json:"rent"`
-		rentWithColorSet int    `json:"rent_with_color_set"`
-		rentWith1House   int    `json:"rent_with_1_house"`
-		rentWith2Houses  int    `json:"rent_with_2_houses"`
-		rentWith3Houses  int    `json:"rent_with_3_houses"`
-		rentWith4Houses  int    `json:"rent_with_4_houses"`
-		rentWithHotel    int    `json:"rent_with_hotel"`
-		mortgageValue    int    `json:"mortgage_value"`
-		ownerID          *int   `json:"owner_id,omitempty"`
-		houses           int    `json:"houses"`
-		hasHotel         bool   `json:"has_hotel"`
-		mortgaged        bool   `json:"mortgaged"`
+		name             string
+		colorGroup       string
+		price            int
+		housePrice       int
+		hotelPrice       int
+		rent             int
+		rentWithColorSet int
+		rentWith1House   int
+		rentWith2Houses  int
+		rentWith3Houses  int
+		rentWith4Houses  int
+		rentWithHotel    int
+		mortgageValue    int
+		ownerID          uuid.UUID
+		houses           int
+		hasHotel         bool
+		mortgaged        bool
 	}
 )
 
@@ -66,11 +64,6 @@ var (
 	_ object.GetMapper = (*property)(nil)
 	_ json.Marshaler   = (*property)(nil)
 )
-
-// GetID implements Propertyer.
-func (p *property) GetID() int {
-	return p.id
-}
 
 // GetName implements Propertyer.
 func (p *property) GetName() string {
@@ -138,7 +131,7 @@ func (p *property) GetMortgageValue() int {
 }
 
 // GetOwnerID implements Propertyer.
-func (p *property) GetOwnerID() *int {
+func (p *property) GetOwnerID() uuid.UUID {
 	return p.ownerID
 }
 
@@ -170,7 +163,6 @@ func (p *property) GetCUDer() CUDer {
 // NewProperty creates a new property
 func NewProperty(
 	id uuid.UUID,
-	propertyID int,
 	name string,
 	colorGroup string,
 	price int,
@@ -184,7 +176,7 @@ func NewProperty(
 	rentWith4Houses int,
 	rentWithHotel int,
 	mortgageValue int,
-	ownerID *int,
+	ownerID uuid.UUID,
 	houses int,
 	hasHotel bool,
 	mortgaged bool,
@@ -195,7 +187,6 @@ func NewProperty(
 	return &property{
 		cuder:            NewCUD(createdAt, updatedAt, deletedAt),
 		cudIDer:          NewCUDID(map[string]uuid.UUID{"id": id}),
-		id:               propertyID,
 		name:             name,
 		colorGroup:       colorGroup,
 		price:            price,
@@ -229,11 +220,6 @@ func NewPropertyFromMap(
 	cudIDer, err := NewCUDIDerFromMap(uuider, value)
 	if err != nil {
 		return nil, err
-	}
-
-	id, ok := value["id"].(int)
-	if !ok {
-		return nil, object.ErrTypeAssertion
 	}
 
 	name, ok := value["name"].(string)
@@ -301,9 +287,13 @@ func NewPropertyFromMap(
 		return nil, object.ErrTypeAssertion
 	}
 
-	var ownerID *int
-	if ownerIDVal, ok := value["owner_id"].(int); ok {
-		ownerID = &ownerIDVal
+	var ownerID uuid.UUID = uuid.Nil
+	if ownerIDVal, ok := value["owner_id"].(string); ok {
+		ownerIDVal, err := uuid.Parse(ownerIDVal)
+		if err != nil {
+			return nil, err
+		}
+		ownerID = ownerIDVal
 	}
 
 	houses, ok := value["houses"].(int)
@@ -324,7 +314,6 @@ func NewPropertyFromMap(
 	return &property{
 		cuder:            cuder,
 		cudIDer:          cudIDer,
-		id:               id,
 		name:             name,
 		colorGroup:       colorGroup,
 		price:            price,
@@ -356,7 +345,6 @@ func (p *property) GetMap() map[string]any {
 		p.cuder.GetMap(),
 		p.cudIDer.GetMap(),
 		map[string]any{
-			"id":                  p.GetID(),
 			"name":                p.GetName(),
 			"color_group":         p.GetColorGroup(),
 			"price":               p.GetPrice(),

@@ -6,6 +6,8 @@ import (
 
 	"github/M2A96/Monopoly.git/object"
 
+	"github.com/google/uuid"
+
 	"gorm.io/gorm"
 )
 
@@ -14,10 +16,10 @@ type (
 	PropertyFilter interface {
 		Filterer
 		// GetIDs is a function.
-		GetIDs() []int
+		GetIDs() []uuid.UUID
 		GetName() string
 		GetColorGroup() string
-		GetOwnerID() *int
+		GetOwnerID() uuid.UUID
 		GetHouses() int
 		GetHasHotel() bool
 		GetMortgaged() bool
@@ -25,10 +27,10 @@ type (
 
 	propertyFilter struct {
 		Filterer
-		ids        []int
+		ids        []uuid.UUID
 		name       string
 		colorGroup string
-		ownerID    *int
+		ownerID    uuid.UUID
 		houses     int
 		hasHotel   bool
 		mortgaged  bool
@@ -43,10 +45,10 @@ var (
 )
 
 func NewPropertyFilter(
-	ids []int,
+	ids []uuid.UUID,
 	name string,
 	colorGroup string,
-	ownerID *int,
+	ownerID uuid.UUID,
 	houses int,
 	hasHotel bool,
 	mortgaged bool,
@@ -100,7 +102,7 @@ func (p *propertyFilter) Filter(
 			Where(fmt.Sprintf(`%[1]s.color_group = ?`, "property"), p.GetColorGroup())
 	}
 
-	if p.GetOwnerID() != nil {
+	if p.GetOwnerID() != uuid.Nil {
 		gormDB = gormDB.
 			Where(fmt.Sprintf(`%[1]s.owner_id = ?`, "property"), p.GetOwnerID())
 	}
@@ -124,7 +126,7 @@ func (p *propertyFilter) Filter(
 }
 
 // GetIDs implements PropertyFilter.
-func (p *propertyFilter) GetIDs() []int {
+func (p *propertyFilter) GetIDs() []uuid.UUID {
 	return p.ids
 }
 
@@ -139,7 +141,7 @@ func (p *propertyFilter) GetColorGroup() string {
 }
 
 // GetOwnerID implements PropertyFilter.
-func (p *propertyFilter) GetOwnerID() *int {
+func (p *propertyFilter) GetOwnerID() uuid.UUID {
 	return p.ownerID
 }
 

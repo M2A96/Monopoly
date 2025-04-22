@@ -121,12 +121,18 @@ func (h *gameHandler) CreateGame(c echo.Context) error {
 		})
 	}
 
+	// Convert UUID to base62 for shorter representation
+	base62Id := util.UUIDToBase62(newGameId)
+
 	h.GetRuntimeLogger().
 		WithFields(fields).
 		WithField(object.URIFieldResponse, newGameId).
+		WithField("base62_id", base62Id).
 		Debug(object.URIEmpty)
 
-	return c.JSON(http.StatusCreated, newGameId)
+	return c.JSON(http.StatusCreated, map[string]string{
+		"id": base62Id,
+	})
 }
 
 // GetGame implements GameHandler.
@@ -156,20 +162,28 @@ func (h *gameHandler) GetGame(c echo.Context) error {
 		WithFields(fields).
 		Info(object.URIEmpty)
 
-	// Parse UUID from path parameter
+	// Parse ID from path parameter - could be UUID or base62 encoded
 	idStr := c.Param("id")
-	id, err := h.GetUUIDer().Parse(idStr)
-	if err != nil {
-		h.GetRuntimeLogger().
-			WithFields(fields).
-			WithField(object.URIFieldError, err).
-			Error(object.ErrUUIDerParse.Error())
-		traceSpan.RecordError(err)
-		traceSpan.SetStatus(codes.Error, object.ErrUUIDerParse.Error())
+	var id uuid.UUID
+	var err error
 
-		return c.JSON(http.StatusBadRequest, map[string]string{
-			"error": "Invalid game ID format",
-		})
+	// Try parsing as standard UUID first
+	id, err = h.GetUUIDer().Parse(idStr)
+	if err != nil {
+		// If not a standard UUID, try parsing as base62
+		id, err = util.Base62ToUUID(idStr)
+		if err != nil {
+			h.GetRuntimeLogger().
+				WithFields(fields).
+				WithField(object.URIFieldError, err).
+				Error("Invalid game ID format - not a valid UUID or base62 ID")
+			traceSpan.RecordError(err)
+			traceSpan.SetStatus(codes.Error, object.ErrUUIDerParse.Error())
+
+			return c.JSON(http.StatusBadRequest, map[string]string{
+				"error": "Invalid game ID format",
+			})
+		}
 	}
 
 	h.GetRuntimeLogger().
@@ -236,21 +250,34 @@ func (h *gameHandler) GetGameState(c echo.Context) error {
 		WithFields(fields).
 		Info(object.URIEmpty)
 
-	// Parse game ID
+	// Parse ID from path parameter - could be UUID or base62 encoded
 	idStr := c.Param("id")
-	id, err := uuid.Parse(idStr)
-	if err != nil {
-		h.GetRuntimeLogger().
-			WithFields(fields).
-			WithField(object.URIFieldError, err).
-			Error(object.ErrUUIDerParse.Error())
-		traceSpan.RecordError(err)
-		traceSpan.SetStatus(codes.Error, object.ErrUUIDerParse.Error())
+	var id uuid.UUID
+	var err error
 
-		return c.JSON(http.StatusBadRequest, map[string]string{
-			"error": "Invalid game ID format",
-		})
+	// Try parsing as standard UUID first
+	id, err = h.GetUUIDer().Parse(idStr)
+	if err != nil {
+		// If not a standard UUID, try parsing as base62
+		id, err = util.Base62ToUUID(idStr)
+		if err != nil {
+			h.GetRuntimeLogger().
+				WithFields(fields).
+				WithField(object.URIFieldError, err).
+				Error("Invalid game ID format - not a valid UUID or base62 ID")
+			traceSpan.RecordError(err)
+			traceSpan.SetStatus(codes.Error, object.ErrUUIDerParse.Error())
+
+			return c.JSON(http.StatusBadRequest, map[string]string{
+				"error": "Invalid game ID format",
+			})
+		}
 	}
+
+	h.GetRuntimeLogger().
+		WithFields(fields).
+		WithField(object.URIFieldID, id).
+		Debug(object.URIEmpty)
 
 	// Get game state using service
 	gameState, err := h.GetServicer().GetGameState(ctxWT, id)
@@ -310,21 +337,34 @@ func (h *gameHandler) StartGame(c echo.Context) error {
 		WithFields(fields).
 		Info(object.URIEmpty)
 
-	// Parse game ID
+	// Parse ID from path parameter - could be UUID or base62 encoded
 	idStr := c.Param("id")
-	id, err := uuid.Parse(idStr)
-	if err != nil {
-		h.GetRuntimeLogger().
-			WithFields(fields).
-			WithField(object.URIFieldError, err).
-			Error("Invalid game ID format")
-		traceSpan.RecordError(err)
-		traceSpan.SetStatus(codes.Error, "Invalid game ID format")
+	var id uuid.UUID
+	var err error
 
-		return c.JSON(http.StatusBadRequest, map[string]string{
-			"error": "Invalid game ID format",
-		})
+	// Try parsing as standard UUID first
+	id, err = h.GetUUIDer().Parse(idStr)
+	if err != nil {
+		// If not a standard UUID, try parsing as base62
+		id, err = util.Base62ToUUID(idStr)
+		if err != nil {
+			h.GetRuntimeLogger().
+				WithFields(fields).
+				WithField(object.URIFieldError, err).
+				Error("Invalid game ID format - not a valid UUID or base62 ID")
+			traceSpan.RecordError(err)
+			traceSpan.SetStatus(codes.Error, object.ErrUUIDerParse.Error())
+
+			return c.JSON(http.StatusBadRequest, map[string]string{
+				"error": "Invalid game ID format",
+			})
+		}
 	}
+
+	h.GetRuntimeLogger().
+		WithFields(fields).
+		WithField(object.URIFieldID, id).
+		Debug(object.URIEmpty)
 
 	// Start game using service
 	err = h.GetServicer().StartGame(ctxWT, id)

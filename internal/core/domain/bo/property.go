@@ -1,10 +1,8 @@
 package bo
 
 import (
-	"database/sql"
 	"encoding/json"
 	"github/M2A96/Monopoly.git/object"
-	"time"
 
 	"github.com/google/uuid"
 	"github.com/samber/lo"
@@ -12,7 +10,7 @@ import (
 
 type (
 	Propertyer interface {
-		GetID() int
+		GetID() uuid.UUID
 		GetName() string
 		GetColorGroup() string
 		GetPrice() int
@@ -26,7 +24,7 @@ type (
 		GetRentWith4Houses() int
 		GetRentWithHotel() int
 		GetMortgageValue() int
-		GetOwnerID() *int
+		GetOwnerID() uuid.UUID
 		GetHouses() int
 		GetHasHotel() bool
 		GetMortgaged() bool
@@ -34,24 +32,24 @@ type (
 
 	// Property represents a property in the game
 	property struct {
-		id               int    `json:"id"`
-		name             string `json:"name"`
-		colorGroup       string `json:"color_group"`
-		price            int    `json:"price"`
-		housePrice       int    `json:"house_price"`
-		hotelPrice       int    `json:"hotel_price"`
-		rent             int    `json:"rent"`
-		rentWithColorSet int    `json:"rent_with_color_set"`
-		rentWith1House   int    `json:"rent_with_1_house"`
-		rentWith2Houses  int    `json:"rent_with_2_houses"`
-		rentWith3Houses  int    `json:"rent_with_3_houses"`
-		rentWith4Houses  int    `json:"rent_with_4_houses"`
-		rentWithHotel    int    `json:"rent_with_hotel"`
-		mortgageValue    int    `json:"mortgage_value"`
-		ownerID          *int   `json:"owner_id,omitempty"`
-		houses           int    `json:"houses"`
-		hasHotel         bool   `json:"has_hotel"`
-		mortgaged        bool   `json:"mortgaged"`
+		id               uuid.UUID
+		name             string
+		colorGroup       string
+		price            int
+		housePrice       int
+		hotelPrice       int
+		rent             int
+		rentWithColorSet int
+		rentWith1House   int
+		rentWith2Houses  int
+		rentWith3Houses  int
+		rentWith4Houses  int
+		rentWithHotel    int
+		mortgageValue    int
+		ownerID          uuid.UUID
+		houses           int
+		hasHotel         bool
+		mortgaged        bool
 	}
 )
 
@@ -62,7 +60,7 @@ var (
 )
 
 // GetID implements Propertyer.
-func (p *property) GetID() int {
+func (p *property) GetID() uuid.UUID {
 	return p.id
 }
 
@@ -132,7 +130,7 @@ func (p *property) GetMortgageValue() int {
 }
 
 // GetOwnerID implements Propertyer.
-func (p *property) GetOwnerID() *int {
+func (p *property) GetOwnerID() uuid.UUID {
 	return p.ownerID
 }
 
@@ -154,7 +152,6 @@ func (p *property) GetMortgaged() bool {
 // NewProperty creates a new property
 func NewProperty(
 	id uuid.UUID,
-	propertyID int,
 	name string,
 	colorGroup string,
 	price int,
@@ -168,16 +165,13 @@ func NewProperty(
 	rentWith4Houses int,
 	rentWithHotel int,
 	mortgageValue int,
-	ownerID *int,
+	ownerID uuid.UUID,
 	houses int,
 	hasHotel bool,
 	mortgaged bool,
-	createdAt time.Time,
-	updatedAt time.Time,
-	deletedAt sql.NullTime,
 ) *property {
 	return &property{
-		id:               propertyID,
+		id:               id,
 		name:             name,
 		colorGroup:       colorGroup,
 		price:            price,
