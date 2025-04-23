@@ -80,4 +80,5 @@ var (
 	URIFieldDAOTradeRequesters                            = "dao_trade_requesters"
 	URIFieldBOTradeRequester                              = "bo_trade_requester"
 	URIFieldBOTradeRequesters                             = "bo_trade_requesters"
+	URIFieldDAOPGameLogFilter                             = "dao_p_game_log_filter"
 )
