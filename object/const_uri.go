@@ -75,6 +75,8 @@ var (
 	URIFieldBOTradeRequests                               = "bo_trade_requests"
 	URIFieldBOGameLogger                                  = "bo_game_logger"
 	URIFieldDAOGameLoggers                                = "dao_game_loggers"
+	URIFieldDAOGameStates                                 = "dao_game_states"
+	URIFieldDAOGameState                                  = "dao_game_state"
 	URIFieldBOGameLoggers                                 = "bo_game_loggers"
 	URIFieldDAOTradeRequester                             = "dao_trade_requester"
 	URIFieldDAOTradeRequesters                            = "dao_trade_requesters"

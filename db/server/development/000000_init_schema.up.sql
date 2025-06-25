@@ -11,8 +11,8 @@ CREATE TABLE GAME (
 
 -- Create PLAYER table
 CREATE TABLE PLAYER (
-    player_id SERIAL PRIMARY KEY,
-    game_id INTEGER REFERENCES GAME(game_id),
+    player_id UUID PRIMARY KEY,
+    game_id UUID REFERENCES GAME(game_id),
     name VARCHAR(255) NOT NULL,
     balance INTEGER DEFAULT 1500,
     position INTEGER DEFAULT 0,
@@ -30,7 +30,7 @@ FOREIGN KEY (winner_id) REFERENCES PLAYER(player_id);
 
 -- Create PROPERTY table
 CREATE TABLE PROPERTY (
-    property_id SERIAL PRIMARY KEY,
+    property_id UUID PRIMARY KEY,
     name VARCHAR(255) NOT NULL,
     color_group VARCHAR(20) CHECK (color_group IN ('BROWN', 'LIGHT_BLUE', 'PINK', 'ORANGE', 'RED', 'YELLOW', 'GREEN', 'DARK_BLUE')),
     price INTEGER NOT NULL,
@@ -48,8 +48,8 @@ CREATE TABLE PROPERTY (
 
 -- Create PLAYER_PROPERTY table
 CREATE TABLE PLAYER_PROPERTY (
-    player_id INTEGER REFERENCES PLAYER(player_id),
-    property_id INTEGER REFERENCES PROPERTY(property_id),
+    player_id UUID REFERENCES PLAYER(player_id),
+    property_id UUID REFERENCES PROPERTY(property_id),
     mortgaged BOOLEAN DEFAULT FALSE,
     houses INTEGER DEFAULT 0,
     has_hotel BOOLEAN DEFAULT FALSE,
@@ -58,16 +58,16 @@ CREATE TABLE PLAYER_PROPERTY (
 
 -- Create BOARD_SPACE table
 CREATE TABLE BOARD_SPACE (
-    space_id SERIAL PRIMARY KEY,
+    space_id UUID PRIMARY KEY,
     position INTEGER UNIQUE NOT NULL,
     space_type VARCHAR(20) CHECK (space_type IN ('PROPERTY', 'CHANCE', 'COMMUNITY_CHEST', 'TAX', 'GO', 'JAIL', 'FREE_PARKING', 'GO_TO_JAIL')),
     name VARCHAR(255) NOT NULL,
-    property_id INTEGER REFERENCES PROPERTY(property_id)
+    property_id UUID REFERENCES PROPERTY(property_id)
 );
 
 -- Create CARD table
 CREATE TABLE CARD (
-    card_id SERIAL PRIMARY KEY,
+    card_id UUID PRIMARY KEY,
     card_type VARCHAR(20) CHECK (card_type IN ('CHANCE', 'COMMUNITY_CHEST')),
     description TEXT NOT NULL,
     action_type VARCHAR(50) NOT NULL,
@@ -76,9 +76,9 @@ CREATE TABLE CARD (
 
 -- Create GAME_LOG table
 CREATE TABLE GAME_LOG (
-    log_id SERIAL PRIMARY KEY,
-    game_id INTEGER REFERENCES GAME(game_id),
-    player_id INTEGER REFERENCES PLAYER(player_id),
+    log_id UUID PRIMARY KEY,
+    game_id UUID REFERENCES GAME(game_id),
+    player_id UUID REFERENCES PLAYER(player_id),
     timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     action VARCHAR(255) NOT NULL,
     details TEXT
@@ -86,7 +86,7 @@ CREATE TABLE GAME_LOG (
 
 -- Create GAME_HOUSE_HOTEL_BANK table
 CREATE TABLE GAME_HOUSE_HOTEL_BANK (
-    game_id INTEGER REFERENCES GAME(game_id) PRIMARY KEY,
+    game_id UUID REFERENCES GAME(game_id) PRIMARY KEY,
     houses_remaining INTEGER DEFAULT 32,
     hotels_remaining INTEGER DEFAULT 12
 );

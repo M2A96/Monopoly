@@ -222,7 +222,11 @@ func (service *gameLogService) List(
 		Info(object.URIEmpty)
 
 	daoGameLoggers, daoCursorer, err := service.GetGameLogRepositorier().
-		ReadList(ctx, daoPaginationer, daoGameLogFilter)
+		ReadList(
+			ctx,
+			daoPaginationer,
+			daoGameLogFilter,
+		)
 	if err != nil {
 		service.GetRuntimeLogger().
 			WithFields(fields).

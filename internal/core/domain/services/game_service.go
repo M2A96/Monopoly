@@ -307,7 +307,7 @@ func (service *gameService) List(
 		service.GetRuntimeLogger().
 			WithFields(fields).
 			WithField(object.URIFieldError, err).
-			Error(object.ErrGameRepositoryReadList.Error())
+			Error(object.ErrGameServiceReadList.Error())
 		traceSpan.RecordError(err)
 		traceSpan.SetStatus(codes.Error, object.ErrGameRepositoryReadList.Error())
 

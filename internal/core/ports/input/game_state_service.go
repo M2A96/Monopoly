@@ -27,7 +27,7 @@ type (
 		// GetGameStateHistory retrieves the history of game states
 		GetGameStateHistory(
 			context.Context,
-			uuid.UUID,
+			dao.GameStateFilter,
 			dao.Paginationer,
 		) ([]bo.GameStater, dao.Cursorer, error)
 
