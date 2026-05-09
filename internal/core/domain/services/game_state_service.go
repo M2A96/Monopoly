@@ -337,22 +337,22 @@ func (service *gameStateService) SaveGameState(
 			WithField(object.URIFieldBOPlayer, boPlayer).
 			Debug(object.URIEmpty)
 
-		daoPlayers = append(daoPlayers, dao.NewPlayer(
-			uuid.Nil,
-			boPlayer.GetGameID(),
-			boPlayer.GetName(),
-			boPlayer.GetBalance(),
-			boPlayer.GetBalance(),
-			boPlayer.GetInJail(),
-			boPlayer.GetJailTurns(),
-			boPlayer.GetBankrupt(),
-			time.Time{},
-			time.Time{},
-			sql.NullTime{
-				Time:  time.Time{},
-				Valid: false,
-			},
-		))
+        daoPlayers = append(daoPlayers, dao.NewPlayer(
+            uuid.Nil,
+            boPlayer.GetGameID(),
+            boPlayer.GetName(),
+            boPlayer.GetBalance(),
+            boPlayer.GetPosition(),
+            boPlayer.GetInJail(),
+            boPlayer.GetJailTurns(),
+            boPlayer.GetBankrupt(),
+            time.Time{},
+            time.Time{},
+            sql.NullTime{
+                Time:  time.Time{},
+                Valid: false,
+            },
+        ))
 	}
 
 	daoProperties := make([]dao.Propertyer, 0, len(boGameState.GetProperties()))

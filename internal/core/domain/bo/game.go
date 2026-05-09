@@ -8,13 +8,13 @@ import (
 )
 
 type (
-	Gamer interface {
-		BOer
-		GetName() string
-		GetStatus() string
-		GetCurrentPlayerID() uuid.UUID
-		GetWinnerID() uuid.UUID
-	}
+    Gamer interface {
+        BOer
+        GetName() string
+        GetStatus() string
+        GetCurrentPlayerID() uuid.UUID
+        GetWinnerID() uuid.UUID
+    }
 
 	game struct {
 		bo
@@ -69,15 +69,15 @@ func (g *game) GetCurrentPlayerID() uuid.UUID {
 
 // GetName implements Gamer.
 func (g *game) GetName() string {
-	return g.name
+    return g.name
 }
 
 // GetStatus implements Gamer.
 func (g *game) GetStatus() string {
-	return g.GetStatus()
+    return g.status
 }
 
 // GetWinnerID implements Gamer.
 func (g *game) GetWinnerID() uuid.UUID {
-	return g.GetWinnerID()
+    return g.winnerID
 }

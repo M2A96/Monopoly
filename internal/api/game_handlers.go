@@ -2,15 +2,15 @@
 package api
 
 import (
-	"context"
-	"net/http"
+    "context"
+    "net/http"
 
-	"github/M2A96/Monopoly.git/config"
-	"github/M2A96/Monopoly.git/internal/core/domain/bo"
-	"github/M2A96/Monopoly.git/internal/core/ports/input"
-	"github/M2A96/Monopoly.git/log"
-	"github/M2A96/Monopoly.git/object"
-	"github/M2A96/Monopoly.git/util"
+    "github/M2A96/Monopoly.git/config"
+    "github/M2A96/Monopoly.git/internal/core/domain/bo"
+    "github/M2A96/Monopoly.git/internal/core/ports/input"
+    "github/M2A96/Monopoly.git/log"
+    "github/M2A96/Monopoly.git/object"
+    "github/M2A96/Monopoly.git/util"
 
 	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/trace"
@@ -20,11 +20,19 @@ import (
 )
 
 type (
-	GameHandler interface {
-		GetGame(c echo.Context) error
-		StartGame(c echo.Context) error
-		GetGameState(c echo.Context) error
-		CreateGame(c echo.Context) error
+    // createGameRequest is the DTO for creating a game via API
+    createGameRequest struct {
+        Name            string    `json:"name"`
+        Status          string    `json:"status"`
+        CurrentPlayerID uuid.UUID `json:"current_player_id"`
+        WinnerID        uuid.UUID `json:"winner_id"`
+    }
+
+    GameHandler interface {
+        GetGame(c echo.Context) error
+        StartGame(c echo.Context) error
+        GetGameState(c echo.Context) error
+        CreateGame(c echo.Context) error
 	}
 	gameHandler struct {
 		handler[input.GameServicer]
@@ -91,28 +99,37 @@ func (h *gameHandler) CreateGame(c echo.Context) error {
 		WithFields(fields).
 		Info(object.URIEmpty)
 
-	// Parse request body
-	var game bo.Gamer
-	if err := c.Bind(&game); err != nil {
-		h.GetRuntimeLogger().
-			WithFields(fields).
-			WithField(object.URIFieldError, err).
-			Error("Failed to parse request body")
-		traceSpan.RecordError(err)
-		traceSpan.SetStatus(codes.Error, "Failed to parse request body")
+    // Parse request body into DTO
+    var req createGameRequest
+    if err := c.Bind(&req); err != nil {
+        h.GetRuntimeLogger().
+            WithFields(fields).
+            WithField(object.URIFieldError, err).
+            Error("Failed to parse request body")
+        traceSpan.RecordError(err)
+        traceSpan.SetStatus(codes.Error, "Failed to parse request body")
 
-		return c.JSON(http.StatusBadRequest, map[string]string{
-			"error": "Invalid request format",
-		})
-	}
+        return c.JSON(http.StatusBadRequest, map[string]string{
+            "error": "Invalid request format",
+        })
+    }
 
-	// Create game using service
-	newGameId, err := h.GetServicer().CreateGame(ctxWT, game)
-	if err != nil {
-		h.GetRuntimeLogger().
-			WithFields(fields).
-			WithField(object.URIFieldError, err).
-			Error(object.ErrGameServiceCreate.Error())
+    // Construct BO from DTO
+    newGameBO := bo.NewGamer(
+        uuid.Nil,
+        req.Name,
+        req.Status,
+        req.CurrentPlayerID,
+        req.WinnerID,
+    )
+
+    // Create game using service
+    newGameId, err := h.GetServicer().CreateGame(ctxWT, newGameBO)
+    if err != nil {
+        h.GetRuntimeLogger().
+            WithFields(fields).
+            WithField(object.URIFieldError, err).
+            Error(object.ErrGameServiceCreate.Error())
 		traceSpan.RecordError(err)
 		traceSpan.SetStatus(codes.Error, object.ErrGameServiceCreate.Error())
 
@@ -307,7 +324,7 @@ func (h *gameHandler) GetGameState(c echo.Context) error {
 		WithField(object.URIFieldResponse, boGame).
 		Debug(object.URIEmpty)
 
-	return c.JSON(http.StatusOK, boGame.GetStatus())
+    return c.JSON(http.StatusOK, boGame.GetMap())
 }
 
 // StartGame implements GameHandler.
