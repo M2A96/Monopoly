@@ -1,0 +1,1 @@
+canonical game state structs

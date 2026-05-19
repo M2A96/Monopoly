@@ -88,7 +88,7 @@ services:
     # ports: []
     restart: "no"
     volumes:
-      - ./db/init_schema.up.sql:/init_schema.up.sql:ro
+      - ./db/server/init_schema.up.sql:/init_schema.up.sql:ro
     # working_dir: ""
   pgadmin4:
     # command: []

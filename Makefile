@@ -94,7 +94,7 @@ K6_TESTMAIL_NAMESPACE := x7gw2
 K6_USER_ID := 1e2d9f38-2777-4ee2-ac3b-b3a108f81a30
 MIGRATE_CI := false
 MIGRATE_DB_ADDR := 127.0.0.1:26257
-MIGRATE_DB_NAME := server
+MIGRATE_DB_NAME := monopoly
 MIGRATE_DSN := "cockroachdb://root@$(MIGRATE_DB_ADDR)/$(MIGRATE_DB_NAME)?sslmode=disable"
 MIGRATE_NAME := migrate_name
 MIGRATE_VER := development
@@ -102,7 +102,7 @@ ifeq ($(MIGRATE_CI), true)
 	MIGRATE_SOURCE := gitlab://$(GITLAB_USER):$(GITLAB_TOKEN)@$(GITLAB_URL)/$(PROJECT_ID)/db/$(MIGRATE_DB_NAME)/$(MIGRATE_VER)\#$(PROJECT_REF)
 	MIGRATE_TAGS := cockroachdb,gitlab
 else
-	MIGRATE_SOURCE := file://db/$(MIGRATE_DB_NAME)/$(MIGRATE_VER)
+	MIGRATE_SOURCE := file://db/server/$(MIGRATE_VER)
 	MIGRATE_TAGS := cockroachdb
 endif
 OUTPUT := dist

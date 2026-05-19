@@ -129,12 +129,12 @@ func NewGamerFromMap(
 		return nil, object.ErrTypeAssertion
 	}
 
-	currentPlayerOd, ok := value["current_player"].(uuid.UUID)
+	currentPlayerOd, ok := value["current_player_id"].(uuid.UUID)
 	if !ok {
 		return nil, object.ErrTypeAssertion
 	}
 
-	winnerId, ok := value["winner"].(uuid.UUID)
+	winnerId, ok := value["winner_id"].(uuid.UUID)
 	if !ok {
 		return nil, object.ErrTypeAssertion
 	}
@@ -163,11 +163,11 @@ func (g *game) GetMap() map[string]any {
 		g.cuder.GetMap(),
 		g.cudIDer.GetMap(),
 		map[string]any{
-			"name":           g.GetName(),
-			"status":         g.GetStatus(),
-			"created_at":     g.GetCreatedAt(),
-			"updated_at":     g.GetUpdatedAt(),
-			"current_player": g.GetCurrentPlayerID(),
-			"winner":         g.GetWinnerID(),
+			"name":              g.GetName(),
+			"status":            g.GetStatus(),
+			"created_at":        g.GetCreatedAt(),
+			"updated_at":        g.GetUpdatedAt(),
+			"current_player_id": g.GetCurrentPlayerID(),
+			"winner_id":         g.GetWinnerID(),
 		})
 }

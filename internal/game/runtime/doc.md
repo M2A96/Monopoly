@@ -1,0 +1,1 @@
+Active game instance in memory

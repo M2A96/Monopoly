@@ -1,0 +1,1 @@
+player intents (CQRS write side)

@@ -34,7 +34,7 @@ func main() {
 	http.DefaultClient.Timeout = object.NUMHTTPClientTimeout
 
 	viper.AutomaticEnv()
-	viper.SetDefault("DATABASE_DSN", "postgresql://root@127.0.0.1:26257/defaultdb?sslmode=disable")
+	viper.SetDefault("DATABASE_DSN", "postgresql://root@127.0.0.1:26257/monopoly?sslmode=disable")
 	viper.SetDefault("LOG_FILE", "file.log")
 	viper.SetDefault("LOG_FORMAT", "json")
 	viper.SetDefault("LOG_LEVEL", "debug")
@@ -244,6 +244,46 @@ func main() {
 			repository.WithGameRepositoryDB(gormDB),
 			repository.WithGameRepositoryTimer(objectTime),
 		),
+		repository.WithPlayerRepositorier(
+			configConfig,
+			logRuntimeLog,
+			objectUUID,
+			traceTracer,
+			repository.WithPlayerRepositoryDB(gormDB),
+			repository.WithPlayerRepositoryTimer(objectTime),
+		),
+		repository.WithPropertyRepositorier(
+			configConfig,
+			logRuntimeLog,
+			objectUUID,
+			traceTracer,
+			repository.WithPropertyRepositoryDB(gormDB),
+			repository.WithPropertyRepositoryTimer(objectTime),
+		),
+		repository.WithGameLogRepositorier(
+			configConfig,
+			logRuntimeLog,
+			objectUUID,
+			traceTracer,
+			repository.WithGameLogRepositoryDB(gormDB),
+			repository.WithGameLogRepositoryTimer(objectTime),
+		),
+		repository.WithGameStateRepositorier(
+			configConfig,
+			logRuntimeLog,
+			objectUUID,
+			traceTracer,
+			repository.WithGameStateRepositoryDB(gormDB),
+			repository.WithGameStateRepositoryTimer(objectTime),
+		),
+		repository.WithTradeRequestRepositorier(
+			configConfig,
+			logRuntimeLog,
+			objectUUID,
+			traceTracer,
+			repository.WithTradeRequestRepositoryDB(gormDB),
+			repository.WithTradeRequestRepositoryTimer(objectTime),
+		),
 	)
 
 	serviceService := services.NewServices(
@@ -256,8 +296,47 @@ func main() {
 				repositoryRepository.GetGameRepositorier(),
 			),
 		),
+		services.WithPlayerService(
+			configConfig,
+			logRuntimeLog,
+			objectUUID,
+			traceTracer,
+			services.WithPlayerServicePlayerRepositorier(
+				repositoryRepository.GetPlayerRepositorier(),
+			),
+		),
+		services.WithPropertyService(
+			configConfig,
+			logRuntimeLog,
+			objectUUID,
+			traceTracer,
+			services.WithPropertyServicePropertyRepositorier(
+				repositoryRepository.GetPropertyRepositorier(),
+			),
+		),
+		services.WithGameLogService(
+			configConfig,
+			logRuntimeLog,
+			objectUUID,
+			traceTracer,
+			services.WithGameLogServiceGameLogRepositorier(
+				repositoryRepository.GetGameLogRepositorier(),
+			),
+			services.WithGameLogServiceTimer(objectTime),
+		),
+		services.WithTradeRequestService(
+			configConfig,
+			logRuntimeLog,
+			objectUUID,
+			traceTracer,
+			services.WithTradeRequestServiceTradeRequestRepositorier(
+				repositoryRepository.GetTradeRequestRepositorier(),
+			),
+			services.WithTradeRequestServiceTimer(objectTime),
+		),
 	)
 
+	healthHandler := api.NewHealthHandler(sqlDB)
 	gameHandler := api.NewGameHandler(
 		configConfig,
 		logRuntimeLog,
@@ -269,7 +348,12 @@ func main() {
 	)
 
 	e := echo.New()
-	gameHandler.RegisterRoutes(e)
+	for _, handler := range []api.Handler{
+		healthHandler,
+		gameHandler,
+	} {
+		handler.RegisterRoutes(e)
+	}
 	e.Start(
 		configConfig.GetServerConfigger().GetEndpointConfigger().GetAddr(),
 	)

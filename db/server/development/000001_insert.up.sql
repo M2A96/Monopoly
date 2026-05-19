@@ -48,59 +48,55 @@ INSERT INTO PROPERTY (property_id, name, color_group, price, house_price, hotel_
 (gen_random_uuid(), 'Electric Company', NULL, 150, NULL, NULL, 4, 10, NULL, NULL, NULL, NULL, NULL, 75),
 (gen_random_uuid(), 'Water Works', NULL, 150, NULL, NULL, 4, 10, NULL, NULL, NULL, NULL, NULL, 75);
 
--- Create temporary table to store property IDs for reference
-CREATE TEMPORARY TABLE property_ids AS
-SELECT property_id, name FROM PROPERTY;
-
 -- Populate BOARD_SPACE table with all 40 spaces
 INSERT INTO BOARD_SPACE (space_id, position, space_type, name, property_id) VALUES
 -- First row (bottom)
 (gen_random_uuid(), 0, 'GO', 'GO', NULL),
-(gen_random_uuid(), 1, 'PROPERTY', 'Mediterranean Avenue', (SELECT property_id FROM property_ids WHERE name = 'Mediterranean Avenue')),
+(gen_random_uuid(), 1, 'PROPERTY', 'Mediterranean Avenue', (SELECT property_id FROM PROPERTY WHERE name = 'Mediterranean Avenue')),
 (gen_random_uuid(), 2, 'COMMUNITY_CHEST', 'Community Chest', NULL),
-(gen_random_uuid(), 3, 'PROPERTY', 'Baltic Avenue', (SELECT property_id FROM property_ids WHERE name = 'Baltic Avenue')),
+(gen_random_uuid(), 3, 'PROPERTY', 'Baltic Avenue', (SELECT property_id FROM PROPERTY WHERE name = 'Baltic Avenue')),
 (gen_random_uuid(), 4, 'TAX', 'Income Tax', NULL),
-(gen_random_uuid(), 5, 'PROPERTY', 'Reading Railroad', (SELECT property_id FROM property_ids WHERE name = 'Reading Railroad')),
-(gen_random_uuid(), 6, 'PROPERTY', 'Oriental Avenue', (SELECT property_id FROM property_ids WHERE name = 'Oriental Avenue')),
+(gen_random_uuid(), 5, 'PROPERTY', 'Reading Railroad', (SELECT property_id FROM PROPERTY WHERE name = 'Reading Railroad')),
+(gen_random_uuid(), 6, 'PROPERTY', 'Oriental Avenue', (SELECT property_id FROM PROPERTY WHERE name = 'Oriental Avenue')),
 (gen_random_uuid(), 7, 'CHANCE', 'Chance', NULL),
-(gen_random_uuid(), 8, 'PROPERTY', 'Vermont Avenue', (SELECT property_id FROM property_ids WHERE name = 'Vermont Avenue')),
-(gen_random_uuid(), 9, 'PROPERTY', 'Connecticut Avenue', (SELECT property_id FROM property_ids WHERE name = 'Connecticut Avenue')),
+(gen_random_uuid(), 8, 'PROPERTY', 'Vermont Avenue', (SELECT property_id FROM PROPERTY WHERE name = 'Vermont Avenue')),
+(gen_random_uuid(), 9, 'PROPERTY', 'Connecticut Avenue', (SELECT property_id FROM PROPERTY WHERE name = 'Connecticut Avenue')),
 
 -- Second row (left side)
 (gen_random_uuid(), 10, 'JAIL', 'Jail / Just Visiting', NULL),
-(gen_random_uuid(), 11, 'PROPERTY', 'St. Charles Place', (SELECT property_id FROM property_ids WHERE name = 'St. Charles Place')),
-(gen_random_uuid(), 12, 'PROPERTY', 'Electric Company', (SELECT property_id FROM property_ids WHERE name = 'Electric Company')),
-(gen_random_uuid(), 13, 'PROPERTY', 'States Avenue', (SELECT property_id FROM property_ids WHERE name = 'States Avenue')),
-(gen_random_uuid(), 14, 'PROPERTY', 'Virginia Avenue', (SELECT property_id FROM property_ids WHERE name = 'Virginia Avenue')),
-(gen_random_uuid(), 15, 'PROPERTY', 'Pennsylvania Railroad', (SELECT property_id FROM property_ids WHERE name = 'Pennsylvania Railroad')),
-(gen_random_uuid(), 16, 'PROPERTY', 'St. James Place', (SELECT property_id FROM property_ids WHERE name = 'St. James Place')),
+(gen_random_uuid(), 11, 'PROPERTY', 'St. Charles Place', (SELECT property_id FROM PROPERTY WHERE name = 'St. Charles Place')),
+(gen_random_uuid(), 12, 'PROPERTY', 'Electric Company', (SELECT property_id FROM PROPERTY WHERE name = 'Electric Company')),
+(gen_random_uuid(), 13, 'PROPERTY', 'States Avenue', (SELECT property_id FROM PROPERTY WHERE name = 'States Avenue')),
+(gen_random_uuid(), 14, 'PROPERTY', 'Virginia Avenue', (SELECT property_id FROM PROPERTY WHERE name = 'Virginia Avenue')),
+(gen_random_uuid(), 15, 'PROPERTY', 'Pennsylvania Railroad', (SELECT property_id FROM PROPERTY WHERE name = 'Pennsylvania Railroad')),
+(gen_random_uuid(), 16, 'PROPERTY', 'St. James Place', (SELECT property_id FROM PROPERTY WHERE name = 'St. James Place')),
 (gen_random_uuid(), 17, 'COMMUNITY_CHEST', 'Community Chest', NULL),
-(gen_random_uuid(), 18, 'PROPERTY', 'Tennessee Avenue', (SELECT property_id FROM property_ids WHERE name = 'Tennessee Avenue')),
-(gen_random_uuid(), 19, 'PROPERTY', 'New York Avenue', (SELECT property_id FROM property_ids WHERE name = 'New York Avenue')),
+(gen_random_uuid(), 18, 'PROPERTY', 'Tennessee Avenue', (SELECT property_id FROM PROPERTY WHERE name = 'Tennessee Avenue')),
+(gen_random_uuid(), 19, 'PROPERTY', 'New York Avenue', (SELECT property_id FROM PROPERTY WHERE name = 'New York Avenue')),
 
 -- Third row (top)
 (gen_random_uuid(), 20, 'FREE_PARKING', 'Free Parking', NULL),
-(gen_random_uuid(), 21, 'PROPERTY', 'Kentucky Avenue', (SELECT property_id FROM property_ids WHERE name = 'Kentucky Avenue')),
+(gen_random_uuid(), 21, 'PROPERTY', 'Kentucky Avenue', (SELECT property_id FROM PROPERTY WHERE name = 'Kentucky Avenue')),
 (gen_random_uuid(), 22, 'CHANCE', 'Chance', NULL),
-(gen_random_uuid(), 23, 'PROPERTY', 'Indiana Avenue', (SELECT property_id FROM property_ids WHERE name = 'Indiana Avenue')),
-(gen_random_uuid(), 24, 'PROPERTY', 'Illinois Avenue', (SELECT property_id FROM property_ids WHERE name = 'Illinois Avenue')),
-(gen_random_uuid(), 25, 'PROPERTY', 'B&O Railroad', (SELECT property_id FROM property_ids WHERE name = 'B&O Railroad')),
-(gen_random_uuid(), 26, 'PROPERTY', 'Atlantic Avenue', (SELECT property_id FROM property_ids WHERE name = 'Atlantic Avenue')),
-(gen_random_uuid(), 27, 'PROPERTY', 'Ventnor Avenue', (SELECT property_id FROM property_ids WHERE name = 'Ventnor Avenue')),
-(gen_random_uuid(), 28, 'PROPERTY', 'Water Works', (SELECT property_id FROM property_ids WHERE name = 'Water Works')),
-(gen_random_uuid(), 29, 'PROPERTY', 'Marvin Gardens', (SELECT property_id FROM property_ids WHERE name = 'Marvin Gardens')),
+(gen_random_uuid(), 23, 'PROPERTY', 'Indiana Avenue', (SELECT property_id FROM PROPERTY WHERE name = 'Indiana Avenue')),
+(gen_random_uuid(), 24, 'PROPERTY', 'Illinois Avenue', (SELECT property_id FROM PROPERTY WHERE name = 'Illinois Avenue')),
+(gen_random_uuid(), 25, 'PROPERTY', 'B&O Railroad', (SELECT property_id FROM PROPERTY WHERE name = 'B&O Railroad')),
+(gen_random_uuid(), 26, 'PROPERTY', 'Atlantic Avenue', (SELECT property_id FROM PROPERTY WHERE name = 'Atlantic Avenue')),
+(gen_random_uuid(), 27, 'PROPERTY', 'Ventnor Avenue', (SELECT property_id FROM PROPERTY WHERE name = 'Ventnor Avenue')),
+(gen_random_uuid(), 28, 'PROPERTY', 'Water Works', (SELECT property_id FROM PROPERTY WHERE name = 'Water Works')),
+(gen_random_uuid(), 29, 'PROPERTY', 'Marvin Gardens', (SELECT property_id FROM PROPERTY WHERE name = 'Marvin Gardens')),
 
 -- Fourth row (right side)
 (gen_random_uuid(), 30, 'GO_TO_JAIL', 'Go To Jail', NULL),
-(gen_random_uuid(), 31, 'PROPERTY', 'Pacific Avenue', (SELECT property_id FROM property_ids WHERE name = 'Pacific Avenue')),
-(gen_random_uuid(), 32, 'PROPERTY', 'North Carolina Avenue', (SELECT property_id FROM property_ids WHERE name = 'North Carolina Avenue')),
+(gen_random_uuid(), 31, 'PROPERTY', 'Pacific Avenue', (SELECT property_id FROM PROPERTY WHERE name = 'Pacific Avenue')),
+(gen_random_uuid(), 32, 'PROPERTY', 'North Carolina Avenue', (SELECT property_id FROM PROPERTY WHERE name = 'North Carolina Avenue')),
 (gen_random_uuid(), 33, 'COMMUNITY_CHEST', 'Community Chest', NULL),
-(gen_random_uuid(), 34, 'PROPERTY', 'Pennsylvania Avenue', (SELECT property_id FROM property_ids WHERE name = 'Pennsylvania Avenue')),
-(gen_random_uuid(), 35, 'PROPERTY', 'Short Line', (SELECT property_id FROM property_ids WHERE name = 'Short Line')),
+(gen_random_uuid(), 34, 'PROPERTY', 'Pennsylvania Avenue', (SELECT property_id FROM PROPERTY WHERE name = 'Pennsylvania Avenue')),
+(gen_random_uuid(), 35, 'PROPERTY', 'Short Line', (SELECT property_id FROM PROPERTY WHERE name = 'Short Line')),
 (gen_random_uuid(), 36, 'CHANCE', 'Chance', NULL),
-(gen_random_uuid(), 37, 'PROPERTY', 'Park Place', (SELECT property_id FROM property_ids WHERE name = 'Park Place')),
+(gen_random_uuid(), 37, 'PROPERTY', 'Park Place', (SELECT property_id FROM PROPERTY WHERE name = 'Park Place')),
 (gen_random_uuid(), 38, 'TAX', 'Luxury Tax', NULL),
-(gen_random_uuid(), 39, 'PROPERTY', 'Boardwalk', (SELECT property_id FROM property_ids WHERE name = 'Boardwalk'));
+(gen_random_uuid(), 39, 'PROPERTY', 'Boardwalk', (SELECT property_id FROM PROPERTY WHERE name = 'Boardwalk'));
 
 -- Populate CARD table with Chance cards
 INSERT INTO CARD (card_id, card_type, description, action_type, action_value) VALUES
@@ -140,6 +136,3 @@ INSERT INTO CARD (card_id, card_type, description, action_type, action_value) VA
 (gen_random_uuid(), 'COMMUNITY_CHEST', 'You are assessed for street repairs. $40 per house, $115 per hotel', 'REPAIRS_ALTERNATIVE', NULL),
 (gen_random_uuid(), 'COMMUNITY_CHEST', 'You have won second prize in a beauty contest. Collect $10', 'COLLECT', 10),
 (gen_random_uuid(), 'COMMUNITY_CHEST', 'You inherit $100', 'COLLECT', 100);
-
--- Clean up temporary table
-DROP TABLE property_ids;
