@@ -1,58 +1,219 @@
-Phased Plan
+# Monopoly — Multiplayer Backend
 
-- Phase 0: Stabilize the foundation
-  
-  - Finish module wiring in main.go for all existing repositories/services/handlers.
-  - Align every DAO, schema, BO, and repository contract.
-  - Remove CRUD assumptions that conflict with authoritative game-state processing.
-  - Add health/readiness endpoints and basic integration tests.
-- Phase 1: Design the domain model
-  
-  - Define explicit game concepts: Game , Player , Turn , Board , Space , CardDeck , Ownership , Bank , Trade , JailState , DiceRoll , ActionRequest .
-  - Separate static game data from mutable runtime state .
-  - Introduce a canonical GameState aggregate instead of spreading logic across unrelated tables.
-  - Decide what must be persisted vs derived.
-- Phase 2: Build the deterministic game engine
-  
-  - Create a pure reducer-style engine: nextState = Reduce(state, command) .
-  - Define commands like CreateGame , JoinGame , StartGame , RollDice , EndTurn , BuyProperty , PayRent , DrawCard , BuildHouse , TradePropose , TradeAccept , Mortgage , DeclareBankruptcy .
-  - Emit typed domain events for every accepted command.
-  - Keep the reducer side-effect free so it can be replayed and tested.
-- Phase 3: Implement turn system and rule enforcement
-  
-  - Add turn order, action windows, dice rules, doubles, jail handling, passing Go, rent calculation, auctions, house/hotel constraints, bankruptcy, and win conditions.
-  - Enforce server-authoritative sequencing so clients cannot mutate state directly.
-  - Add validation guards so illegal actions fail deterministically.
-- Phase 4: In-memory runtime engine
-  
-  - Introduce a runtime GameRoom or Session manager that owns active game state in memory for low-latency play.
-  - Load game snapshot on activation, process commands sequentially, publish state/event updates, and checkpoint periodically.
-  - Use one goroutine or serialized command queue per game to avoid race conditions.
-- Phase 5: WebSocket real-time layer
-  
-  - Keep REST for admin/lobby/bootstrap flows.
-  - Add WebSocket endpoints for live gameplay, presence, reconnect, and push updates.
-  - Define transport messages for command , event , state_patch , presence , and error .
-  - Add player authentication/session binding and reconnect tokens.
-- Phase 6: Persistence and recovery
-  
-  - Persist commands/events and periodic snapshots.
-  - On restart, rebuild a game from latest snapshot + trailing events.
-  - Store append-only game history for auditing/debugging.
-  - Decide whether current GAME_LOG becomes a real event store or remains a human-readable audit table.
-- Phase 7: Redis integration
-  
-  - Use Redis for ephemeral coordination: active room registry, connection presence, pub/sub fanout, idempotency keys, locks, and short-lived session data.
-  - Do not use Redis as the source of truth for game correctness; keep authoritative persistence in DB/event storage.
-  - Use Redis streams or pub/sub only for distribution, not for rule evaluation.
-- Phase 8: Multi-node scalability
-  
-  - Add room ownership so exactly one node is authoritative for a live game at a time.
-  - Route commands to the owning node through Redis/pubsub or service RPC.
-  - Support reconnect to any node with proxying or ownership lookup.
-  - Add shard/rebalance strategy for active games and background snapshotting.
-- Phase 9: Production hardening
-  
-  - Add anti-cheat validation, rate limits, reconnect flows, command idempotency, dead-letter handling, and metrics.
-  - Add observability around per-game latency, reducer failures, reconnect success rate, and snapshot restore time.
-  - Add soak tests and deterministic replay tests.
+A server-authoritative, event-driven multiplayer Monopoly backend written in Go.
+
+---
+
+## Architecture
+
+The system follows a **hexagonal (ports-and-adapters)** design:
+
+```
+cmd/server/main.go                   → dependency wiring & boot
+internal/api/                        → HTTP handlers (transport layer)
+internal/core/ports/input/           → input port interfaces (service contracts)
+internal/core/ports/output/          → output port interfaces (repository contracts)
+internal/core/domain/services/       → domain service implementations
+internal/core/domain/bo/             → business objects (domain entities)
+internal/infrastructure/repository/  → repository implementations (GORM)
+internal/game/                       → game engine (commands, reducers, runtime, rules...)
+object/dao/                          → data access objects (DB-level structs)
+config/                              → centralized configuration (Viper)
+log/                                 → structured logging (Zap)
+util/                                → shared utilities
+pkg/board/, pkg/dice/, pkg/monopoly/ → static game definitions
+```
+
+### Core Design Rules
+
+- **Server authoritative** — clients send commands, receive events; they never calculate outcomes.
+- **Deterministic reducers** — same state + same commands always produce the same result (enables replay, debugging, anti-cheat).
+- **Single writer per game** — one goroutine owns each active game room; no concurrent state mutation.
+- **Commands vs Events** — commands are intentions (can fail), events are facts (immutable after persistence).
+- **Immutable event history** — events are never modified after being written.
+
+---
+
+## Tech Stack
+
+| Layer | Technology |
+|---|---|
+| Language | Go 1.23 |
+| HTTP framework | Echo v4 |
+| Database | CockroachDB (Postgres-compatible) |
+| ORM | GORM |
+| Configuration | Viper |
+| Logging | Zap |
+| Tracing | OpenTelemetry (OTLP/gRPC export) |
+| Profiling | Grafana Pyroscope |
+| Validation | go-playground/validator |
+| Auth tokens | lestrrat-go/jwx v2 |
+| Mocking | uber/mock |
+| Migrations | golang-migrate |
+| Container | Docker Compose |
+
+---
+
+## REST API
+
+### Health
+
+| Method | Path | Description |
+|---|---|---|
+| `GET` | `/health` `/healthz` | Liveness — process is alive |
+| `GET` | `/ready` `/readyz` | Readiness — database reachable |
+
+### Games
+
+| Method | Path | Description |
+|---|---|---|
+| `POST` | `/api/v1/games` | Create a game |
+| `GET` | `/api/v1/games/:id` | Get a game (UUID or base62 ID) |
+| `POST` | `/api/v1/games/:id/start` | Start a game |
+
+### Players
+
+| Method | Path | Description |
+|---|---|---|
+| `POST` | `/api/v1/players` | Create a player |
+| `GET` | `/api/v1/players/:id` | Get a player |
+
+### Properties
+
+| Method | Path | Description |
+|---|---|---|
+| `GET` | `/api/v1/properties/:id` | Get a property |
+
+### Trade Requests
+
+| Method | Path | Description |
+|---|---|---|
+| `POST` | `/api/v1/trade-requests` | Create a trade request |
+| `GET` | `/api/v1/trade-requests/:id` | Get a trade request |
+
+### Game State
+
+| Method | Path | Description |
+|---|---|---|
+| `GET` | `/api/v1/games/:id/state/current` | Get the current game state |
+
+### Game Logs
+
+| Method | Path | Description |
+|---|---|---|
+| `GET` | `/api/v1/games/:id/logs` | List game logs |
+
+---
+
+## Infrastructure
+
+Services are orchestrated with Docker Compose (`compose.yaml`):
+
+| Service | Port | Purpose |
+|---|---|---|
+| CockroachDB | `26257` (SQL), `8080` (admin) | Primary database |
+| pgAdmin4 | `5050` | Database UI |
+
+### Start infrastructure
+
+```bash
+docker compose up -d
+```
+
+### Run migrations
+
+```bash
+make migrate-up
+```
+
+### Drop migrations
+
+```bash
+make migrate-down
+```
+
+---
+
+## Development
+
+### Requirements
+
+- Go 1.23+
+- Docker & Docker Compose
+- `make`
+
+### Run
+
+```bash
+go run ./cmd/server
+```
+
+### Test
+
+```bash
+make test
+```
+
+### Coverage
+
+```bash
+make coverage
+```
+
+### Format
+
+```bash
+make fmt
+```
+
+### Lint
+
+```bash
+make golangci-lint
+```
+
+### Build
+
+```bash
+make build
+```
+
+---
+
+## Middleware
+
+Every request is processed by:
+
+- **RequestIDMiddleware** — generates/propagates `X-Request-ID`
+- **CorrelationIDMiddleware** — generates/propagates `X-Correlation-ID`
+- **StructuredLogMiddleware** — logs method, path, status, latency, request_id, correlation_id
+
+---
+
+## Roadmap
+
+| Phase | Description | Status |
+|---|---|---|
+| 0 | Foundation stabilization (config, DI, health, logging, tests) | Done |
+| 1 | Domain modeling (GameState, Player, Turn, Board, Events, Commands) | In progress |
+| 2 | Deterministic game engine (reducers, replay, pure dice provider) | Planned |
+| 3 | Rule enforcement (turn order, property, jail, auction, bankruptcy) | Planned |
+| 4 | In-memory runtime engine (GameRoom, goroutine per room, snapshots) | Planned |
+| 5 | WebSocket realtime layer (transport protocol, reconnect, presence) | Planned |
+| 6 | Persistence & recovery (event store, snapshot store, replay) | Planned |
+| 7 | Redis integration (room registry, presence cache, pub/sub, locks) | Planned |
+| 8 | Multi-node scalability (room ownership, command routing, failover) | Planned |
+| 9 | Production hardening (metrics, idempotency, anti-cheat, soak tests) | Planned |
+
+See [Phases.md](Phases.md) for the full engineering roadmap and [AUDIT.md](AUDIT.md) for the Phase 0 architecture audit.
+
+---
+
+## Final System Goals
+
+- Deterministic and replayable game engine
+- Realtime multiplayer over WebSocket
+- Server authoritative with no client-side state mutation
+- Horizontally scalable across multiple nodes
+- Race-free via single-writer-per-room model
+- Crash-recoverable via event sourcing and snapshots

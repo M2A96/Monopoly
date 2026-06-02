@@ -1,4 +1,3 @@
-// internal/core/domain/services/trade_request_service.go
 package services
 
 import (
@@ -19,7 +18,6 @@ import (
 	"go.opentelemetry.io/otel/trace"
 )
 
-// TradeRequestService implements the input.TradeRequestServicer interface
 type (
 	tradeRequestService struct {
 		configConfigger                    config.Configger
@@ -47,7 +45,6 @@ var (
 	_ util.GetTracer                     = (*tradeRequestService)(nil)
 )
 
-// NewTradeRequestService creates a new trade request service instance
 func NewTradeRequestService(
 	configConfigger config.Configger,
 	logRuntimeLogger log.RuntimeLogger,
@@ -67,7 +64,6 @@ func NewTradeRequestService(
 	return tradeRequestService.WithOptioners(optioners...)
 }
 
-// WithTradeRequestServiceTradeRequestRepositorier sets the trade request repository for the service
 func WithTradeRequestServiceTradeRequestRepositorier(
 	repositoryTradeRequestRepositorier output.TradeRequestRepositorier,
 ) tradeRequestServiceOptioner {
@@ -78,7 +74,6 @@ func WithTradeRequestServiceTradeRequestRepositorier(
 	})
 }
 
-// WithTradeRequestServiceTimer sets the timer for the service
 func WithTradeRequestServiceTimer(
 	objectTimer object.Timer,
 ) tradeRequestServiceOptioner {
@@ -89,7 +84,6 @@ func WithTradeRequestServiceTimer(
 	})
 }
 
-// WithOptioners applies the provided optioners to the service
 func (service *tradeRequestService) WithOptioners(
 	optioners ...tradeRequestServiceOptioner,
 ) *tradeRequestService {
@@ -100,37 +94,30 @@ func (service *tradeRequestService) WithOptioners(
 	return service
 }
 
-// GetTracer implements util.GetTracer
 func (service *tradeRequestService) GetTracer() trace.Tracer {
 	return service.traceTracer
 }
 
-// GetTradeRequestRepositorier implements output.GetTradeRequestRepositorier
 func (service *tradeRequestService) GetTradeRequestRepositorier() output.TradeRequestRepositorier {
 	return service.repositoryTradeRequestRepositorier
 }
 
-// GetUUIDer implements object.GetUUIDer
 func (service *tradeRequestService) GetUUIDer() object.UUIDer {
 	return service.objectUUIDer
 }
 
-// GetRuntimeLogger implements log.GetRuntimeLogger
 func (service *tradeRequestService) GetRuntimeLogger() log.RuntimeLogger {
 	return service.logRuntimeLogger
 }
 
-// GetConfigger implements config.GetConfigger
 func (service *tradeRequestService) GetConfigger() config.Configger {
 	return service.configConfigger
 }
 
-// GetTimer implements object.GetTimer
 func (service *tradeRequestService) GetTimer() object.Timer {
 	return service.objectTimer
 }
 
-// Get implements input.TradeRequestServicer
 func (service *tradeRequestService) Get(
 	ctx context.Context,
 	id uuid.UUID,
@@ -202,7 +189,6 @@ func (service *tradeRequestService) Get(
 	return boTradeRequester, nil
 }
 
-// List implements input.TradeRequestServicer
 func (service *tradeRequestService) List(
 	ctx context.Context,
 	daoPaginationer dao.Paginationer,
@@ -281,7 +267,6 @@ func (service *tradeRequestService) List(
 	return boTradeRequesters, daoCursorer, nil
 }
 
-// CreateTradeRequest implements input.TradeRequestServicer
 func (service *tradeRequestService) CreateTradeRequest(
 	ctx context.Context,
 	boTradeRequester bo.TradeRequester,
@@ -320,7 +305,7 @@ func (service *tradeRequestService) CreateTradeRequest(
 		boTradeRequester.GetRequestingMoney(),
 		boTradeRequester.GetOfferingProperties(),
 		boTradeRequester.GetRequestingProperties(),
-		"pending", // Initial status is always pending
+		"pending",
 		nowUTC,
 		nowUTC,
 		sql.NullTime{
@@ -354,334 +339,6 @@ func (service *tradeRequestService) CreateTradeRequest(
 	return id.GetID()["id"], nil
 }
 
-// UpdateTradeRequest implements input.TradeRequestServicer
-func (service *tradeRequestService) UpdateTradeRequest(
-	ctx context.Context,
-	id uuid.UUID,
-	boTradeRequester bo.TradeRequester,
-) error {
-	var traceSpan trace.Span
-
-	ctx, traceSpan = service.GetTracer().Start(
-		ctx,
-		"UpdateTradeRequest",
-		trace.WithSpanKind(trace.SpanKindInternal),
-	)
-	defer traceSpan.End()
-
-	utilRuntimeContext := util.NewRuntimeContext(ctx)
-	utilSpanContext := util.NewSpanContext(traceSpan)
-	fields := map[string]any{
-		"name":               "UpdateTradeRequest",
-		"rt_ctx":             utilRuntimeContext,
-		"sp_ctx":             utilSpanContext,
-		"config":             service.GetConfigger(),
-		"id":                 id,
-		"bo_trade_requester": boTradeRequester,
-	}
-
-	service.GetRuntimeLogger().
-		WithFields(fields).
-		Info(object.URIEmpty)
-
-	// First check if the trade request exists
-	cudIDer := dao.NewCUDID(map[string]uuid.UUID{"id": id})
-	existingTradeRequest, err := service.GetTradeRequestRepositorier().Read(ctx, cudIDer)
-	if err != nil {
-		service.GetRuntimeLogger().
-			WithFields(fields).
-			WithField(object.URIFieldError, err).
-			Error("Failed to read trade request for update")
-		traceSpan.RecordError(err)
-		traceSpan.SetStatus(codes.Error, "Failed to read trade request for update")
-
-		return err
-	}
-
-	nowUTC := service.GetTimer().NowUTC()
-
-	// Create updated trade request with existing timestamps
-	daoTradeRequester := dao.NewTradeRequest(
-		id,
-		boTradeRequester.GetGameID(),
-		boTradeRequester.GetSenderID(),
-		boTradeRequester.GetReceiverID(),
-		boTradeRequester.GetOfferingMoney(),
-		boTradeRequester.GetRequestingMoney(),
-		boTradeRequester.GetOfferingProperties(),
-		boTradeRequester.GetRequestingProperties(),
-		"pending", // Initial status is always pending
-		existingTradeRequest.GetCUDer().GetCreatedAt(),
-		nowUTC,
-		existingTradeRequest.GetCUDer().GetDeletedAt(),
-	)
-
-	service.GetRuntimeLogger().
-		WithFields(fields).
-		WithField(object.URIFieldDAOTradeRequester, daoTradeRequester).
-		Debug(object.URIEmpty)
-
-	_, err = service.GetTradeRequestRepositorier().
-		Update(ctx, daoTradeRequester)
-	if err != nil {
-		service.GetRuntimeLogger().
-			WithFields(fields).
-			WithField(object.URIFieldError, err).
-			Error("Failed to update trade request")
-		traceSpan.RecordError(err)
-		traceSpan.SetStatus(codes.Error, "Failed to update trade request")
-
-		return err
-	}
-
-	return nil
-}
-
-// DeleteTradeRequest implements input.TradeRequestServicer
-func (service *tradeRequestService) DeleteTradeRequest(
-	ctx context.Context,
-	id uuid.UUID,
-) error {
-	var traceSpan trace.Span
-
-	ctx, traceSpan = service.GetTracer().Start(
-		ctx,
-		"DeleteTradeRequest",
-		trace.WithSpanKind(trace.SpanKindInternal),
-	)
-	defer traceSpan.End()
-
-	utilRuntimeContext := util.NewRuntimeContext(ctx)
-	utilSpanContext := util.NewSpanContext(traceSpan)
-	fields := map[string]any{
-		"name":   "DeleteTradeRequest",
-		"rt_ctx": utilRuntimeContext,
-		"sp_ctx": utilSpanContext,
-		"config": service.GetConfigger(),
-		"id":     id,
-	}
-
-	service.GetRuntimeLogger().
-		WithFields(fields).
-		Info(object.URIEmpty)
-
-	cudIDer := dao.NewCUDID(map[string]uuid.UUID{"id": id})
-
-	service.GetRuntimeLogger().
-		WithFields(fields).
-		WithField(object.URIFieldCUDIDer, cudIDer).
-		Debug(object.URIEmpty)
-
-	_, err := service.GetTradeRequestRepositorier().
-		Delete(
-			ctx,
-			cudIDer,
-		)
-	if err != nil {
-		service.GetRuntimeLogger().
-			WithFields(fields).
-			WithField(object.URIFieldError, err).
-			Error("Failed to delete trade request")
-		traceSpan.RecordError(err)
-		traceSpan.SetStatus(codes.Error, "Failed to delete trade request")
-
-		return err
-	}
-
-	return nil
-}
-
-// AcceptTradeRequest implements input.TradeRequestServicer
-func (service *tradeRequestService) AcceptTradeRequest(
-	ctx context.Context,
-	id uuid.UUID,
-) error {
-	var traceSpan trace.Span
-
-	ctx, traceSpan = service.GetTracer().Start(
-		ctx,
-		"AcceptTradeRequest",
-		trace.WithSpanKind(trace.SpanKindInternal),
-	)
-	defer traceSpan.End()
-
-	utilRuntimeContext := util.NewRuntimeContext(ctx)
-	utilSpanContext := util.NewSpanContext(traceSpan)
-	fields := map[string]any{
-		"name":   "AcceptTradeRequest",
-		"rt_ctx": utilRuntimeContext,
-		"sp_ctx": utilSpanContext,
-		"config": service.GetConfigger(),
-		"id":     id,
-	}
-
-	service.GetRuntimeLogger().
-		WithFields(fields).
-		Info(object.URIEmpty)
-
-	// First get the existing trade request
-	cudIDer := dao.NewCUDID(map[string]uuid.UUID{"id": id})
-	boTradeRequester, err := service.GetTradeRequestRepositorier().Read(ctx, cudIDer)
-	if err != nil {
-		service.GetRuntimeLogger().
-			WithFields(fields).
-			WithField(object.URIFieldError, err).
-			Error("Failed to read trade request for acceptance")
-		traceSpan.RecordError(err)
-		traceSpan.SetStatus(codes.Error, "Failed to read trade request for acceptance")
-
-		return err
-	}
-
-	// Check if the trade request is in a state that can be accepted
-	if boTradeRequester.GetStatus() != "pending" {
-		service.GetRuntimeLogger().
-			WithFields(fields).
-			WithField(object.URIFieldError, err).
-			Error("Trade request is not in pending status")
-		traceSpan.RecordError(err)
-		traceSpan.SetStatus(codes.Error, "Trade request is not in pending status")
-
-		return err
-	}
-
-	nowUTC := service.GetTimer().NowUTC()
-
-	// Update the trade request status to accepted
-	updatedTradeRequest := dao.NewTradeRequest(id,
-		boTradeRequester.GetGameID(),
-		boTradeRequester.GetSenderID(),
-		boTradeRequester.GetReceiverID(),
-		boTradeRequester.GetOfferingMoney(),
-		boTradeRequester.GetRequestingMoney(),
-		boTradeRequester.GetOfferingProperties(),
-		boTradeRequester.GetRequestingProperties(),
-		"accepted", // Initial status is always pending
-		boTradeRequester.GetCUDer().GetCreatedAt(),
-		nowUTC,
-		boTradeRequester.GetCUDer().GetDeletedAt(),
-	)
-
-	service.GetRuntimeLogger().
-		WithFields(fields).
-		WithField(object.URIFieldDAOTradeRequester, updatedTradeRequest).
-		Debug(object.URIEmpty)
-
-	_, err = service.GetTradeRequestRepositorier().
-		Update(ctx, updatedTradeRequest)
-	if err != nil {
-		service.GetRuntimeLogger().
-			WithFields(fields).
-			WithField(object.URIFieldError, err).
-			Error("Failed to update trade request status to accepted")
-		traceSpan.RecordError(err)
-		traceSpan.SetStatus(codes.Error, "Failed to update trade request status to accepted")
-
-		return err
-	}
-
-	// TODO: Implement the actual property and money transfer logic here
-	// This would involve updating player properties and balances
-
-	return nil
-}
-
-// RejectTradeRequest implements input.TradeRequestServicer
-func (service *tradeRequestService) RejectTradeRequest(
-	ctx context.Context,
-	id uuid.UUID,
-) error {
-	var traceSpan trace.Span
-
-	ctx, traceSpan = service.GetTracer().Start(
-		ctx,
-		"RejectTradeRequest",
-		trace.WithSpanKind(trace.SpanKindInternal),
-	)
-	defer traceSpan.End()
-
-	utilRuntimeContext := util.NewRuntimeContext(ctx)
-	utilSpanContext := util.NewSpanContext(traceSpan)
-	fields := map[string]any{
-		"name":   "RejectTradeRequest",
-		"rt_ctx": utilRuntimeContext,
-		"sp_ctx": utilSpanContext,
-		"config": service.GetConfigger(),
-		"id":     id,
-	}
-
-	service.GetRuntimeLogger().
-		WithFields(fields).
-		Info(object.URIEmpty)
-
-	// First get the existing trade request
-	cudIDer := dao.NewCUDID(map[string]uuid.UUID{"id": id})
-	existingTradeRequest, err := service.GetTradeRequestRepositorier().Read(ctx, cudIDer)
-	if err != nil {
-		service.GetRuntimeLogger().
-			WithFields(fields).
-			WithField(object.URIFieldError, err).
-			Error("Failed to read trade request for rejection")
-		traceSpan.RecordError(err)
-		traceSpan.SetStatus(codes.Error, "Failed to read trade request for rejection")
-
-		return err
-	}
-
-	// Check if the trade request is in a state that can be rejected
-	if existingTradeRequest.GetStatus() != "pending" {
-		service.GetRuntimeLogger().
-			WithFields(fields).
-			WithField(object.URIFieldError, err).
-			Error("Trade request is not in pending status")
-		traceSpan.RecordError(err)
-		traceSpan.SetStatus(codes.Error, "Trade request is not in pending status")
-
-		return err
-	}
-
-	nowUTC := service.GetTimer().NowUTC()
-
-	// Update the trade request status to rejected
-	updatedTradeRequest := dao.NewTradeRequest(
-		id,
-		existingTradeRequest.GetGameID(),
-		existingTradeRequest.GetSenderID(),
-		existingTradeRequest.GetReceiverID(),
-		existingTradeRequest.GetOfferingMoney(),
-		existingTradeRequest.GetRequestingMoney(),
-		existingTradeRequest.GetOfferingProperties(),
-		existingTradeRequest.GetRequestingProperties(),
-		"rejected",
-		existingTradeRequest.GetCUDer().GetCreatedAt(),
-		nowUTC,
-		existingTradeRequest.GetCUDer().GetDeletedAt(),
-	)
-
-	service.GetRuntimeLogger().
-		WithFields(fields).
-		WithField(object.URIFieldDAOTradeRequester, updatedTradeRequest).
-		Debug(object.URIEmpty)
-
-	_, err = service.GetTradeRequestRepositorier().
-		Update(ctx,
-			updatedTradeRequest,
-		)
-	if err != nil {
-		service.GetRuntimeLogger().
-			WithFields(fields).
-			WithField(object.URIFieldError, err).
-			Error("Failed to update trade request status to rejected")
-		traceSpan.RecordError(err)
-		traceSpan.SetStatus(codes.Error, "Failed to update trade request status to rejected")
-
-		return err
-	}
-
-	return nil
-}
-
-// GetTradeRequestsByGameID implements input.TradeRequestServicer
 func (service *tradeRequestService) GetTradeRequestsByGameID(
 	ctx context.Context,
 	gameID uuid.UUID,
@@ -711,11 +368,10 @@ func (service *tradeRequestService) GetTradeRequestsByGameID(
 		WithFields(fields).
 		Info(object.URIEmpty)
 
-	// Create a filter for game ID
 	daoTradeFilter := dao.NewTradeFilter(
 		[]uuid.UUID{},
-		uuid.Nil, // No specific sender
-		uuid.Nil, // No specific receiver
+		uuid.Nil,
+		uuid.Nil,
 		"",
 		gameID,
 	)
@@ -725,11 +381,9 @@ func (service *tradeRequestService) GetTradeRequestsByGameID(
 		WithField("dao_trade_filter", daoTradeFilter).
 		Debug(object.URIEmpty)
 
-	// Use the List method with the game ID filter
 	return service.List(ctx, daoPaginationer, daoTradeFilter)
 }
 
-// GetTradeRequestsByPlayerID implements input.TradeRequestServicer
 func (service *tradeRequestService) GetTradeRequestsByPlayerID(
 	ctx context.Context,
 	playerID uuid.UUID,
@@ -759,22 +413,13 @@ func (service *tradeRequestService) GetTradeRequestsByPlayerID(
 		WithFields(fields).
 		Info(object.URIEmpty)
 
-	// Create a filter for player ID (as either sender or receiver)
-	// We'll need to make two separate queries and combine the results
-
-	// First, get trade requests where player is the sender
 	daoTradeFilterSender := dao.NewTradeFilter(
 		[]uuid.UUID{},
-		playerID, // Player as sender
-		uuid.Nil, // No specific game
-		"",       // No specific receiver
-		uuid.Nil, // No specific receiver
+		playerID,
+		uuid.Nil,
+		"",
+		uuid.Nil,
 	)
-
-	service.GetRuntimeLogger().
-		WithFields(fields).
-		WithField("dao_trade_filter_sender", daoTradeFilterSender).
-		Debug(object.URIEmpty)
 
 	senderRequests, senderCursor, err := service.List(ctx, daoPaginationer, daoTradeFilterSender)
 	if err != nil {
@@ -788,19 +433,13 @@ func (service *tradeRequestService) GetTradeRequestsByPlayerID(
 		return nil, nil, err
 	}
 
-	// Then, get trade requests where player is the receiver
 	daoTradeFilterReceiver := dao.NewTradeFilter(
 		[]uuid.UUID{},
-		uuid.Nil, // No specific game
-		playerID, // No specific sender
-		"",       // Player as receiver
-		uuid.Nil, // No specific status
+		uuid.Nil,
+		playerID,
+		"",
+		uuid.Nil,
 	)
-
-	service.GetRuntimeLogger().
-		WithFields(fields).
-		WithField("dao_trade_filter_receiver", daoTradeFilterReceiver).
-		Debug(object.URIEmpty)
 
 	receiverRequests, receiverCursor, err := service.List(ctx, daoPaginationer, daoTradeFilterReceiver)
 	if err != nil {
@@ -814,10 +453,8 @@ func (service *tradeRequestService) GetTradeRequestsByPlayerID(
 		return nil, nil, err
 	}
 
-	// Combine the results
 	combinedRequests := append(senderRequests, receiverRequests...)
 
-	// Use the cursor with the higher offset
 	var combinedCursor dao.Cursorer
 	if senderCursor.GetOffset() > receiverCursor.GetOffset() {
 		combinedCursor = senderCursor

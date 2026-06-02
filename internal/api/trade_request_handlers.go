@@ -1,4 +1,3 @@
-// internal/api/trade_request_handlers.go
 package api
 
 import (
@@ -29,10 +28,6 @@ type (
 		GetTradeRequest(c echo.Context) error
 		ListTradeRequests(c echo.Context) error
 		CreateTradeRequest(c echo.Context) error
-		UpdateTradeRequest(c echo.Context) error
-		DeleteTradeRequest(c echo.Context) error
-		AcceptTradeRequest(c echo.Context) error
-		RejectTradeRequest(c echo.Context) error
 		GetTradeRequestsByGameID(c echo.Context) error
 		GetTradeRequestsByPlayerID(c echo.Context) error
 	}
@@ -49,7 +44,6 @@ var (
 	_ TradeRequestHandler = (*tradeRequestHandler)(nil)
 )
 
-// NewTradeRequestHandler creates a new trade request handler instance
 func NewTradeRequestHandler(
 	configConfigger config.Configger,
 	logRuntimeLogger log.RuntimeLogger,
@@ -68,14 +62,12 @@ func NewTradeRequestHandler(
 	}
 }
 
-// WithTradeRequestHandlerTradeRequestServicer sets the trade request service for the handler
 func WithTradeRequestHandlerTradeRequestServicer(
 	serviceTradeRequestServicer input.TradeRequestServicer,
 ) tradeRequestHandlerOptioner {
 	return WithHandlerServicer[input.TradeRequestServicer](serviceTradeRequestServicer)
 }
 
-// CreateTradeRequest implements TradeRequestHandler
 func (h *tradeRequestHandler) CreateTradeRequest(c echo.Context) error {
 	ctx := c.Request().Context()
 	ctxWT, ctxWTCancelFunc := context.WithTimeout(ctx, object.NUMHTTPServerTimeout)
@@ -102,7 +94,6 @@ func (h *tradeRequestHandler) CreateTradeRequest(c echo.Context) error {
 		WithFields(fields).
 		Info(object.URIEmpty)
 
-	// Parse request body
 	var tradeRequest bo.TradeRequester
 	if err := c.Bind(&tradeRequest); err != nil {
 		h.GetRuntimeLogger().
@@ -117,8 +108,7 @@ func (h *tradeRequestHandler) CreateTradeRequest(c echo.Context) error {
 		})
 	}
 
-	// Create trade request using service
-	newTradeRequestId, err := h.GetServicer().CreateTradeRequest(ctxWT, tradeRequest)
+	newTradeRequestID, err := h.GetServicer().CreateTradeRequest(ctxWT, tradeRequest)
 	if err != nil {
 		h.GetRuntimeLogger().
 			WithFields(fields).
@@ -132,21 +122,19 @@ func (h *tradeRequestHandler) CreateTradeRequest(c echo.Context) error {
 		})
 	}
 
-	// Convert UUID to base62 for shorter representation
-	base62Id := util.UUIDToBase62(newTradeRequestId)
+	base62ID := util.UUIDToBase62(newTradeRequestID)
 
 	h.GetRuntimeLogger().
 		WithFields(fields).
-		WithField(object.URIFieldResponse, newTradeRequestId).
-		WithField("base62_id", base62Id).
+		WithField(object.URIFieldResponse, newTradeRequestID).
+		WithField("base62_id", base62ID).
 		Debug(object.URIEmpty)
 
 	return c.JSON(http.StatusCreated, map[string]string{
-		"id": base62Id,
+		"id": base62ID,
 	})
 }
 
-// GetTradeRequest implements TradeRequestHandler
 func (h *tradeRequestHandler) GetTradeRequest(c echo.Context) error {
 	ctx := c.Request().Context()
 	ctxWT, ctxWTCancelFunc := context.WithTimeout(ctx, object.NUMHTTPServerTimeout)
@@ -173,21 +161,18 @@ func (h *tradeRequestHandler) GetTradeRequest(c echo.Context) error {
 		WithFields(fields).
 		Info(object.URIEmpty)
 
-	// Parse ID from path parameter - could be UUID or base62 encoded
 	idStr := c.Param("id")
 	var id uuid.UUID
 	var err error
 
-	// Try parsing as standard UUID first
 	id, err = h.GetUUIDer().Parse(idStr)
 	if err != nil {
-		// If not a standard UUID, try parsing as base62
 		id, err = util.Base62ToUUID(idStr)
 		if err != nil {
 			h.GetRuntimeLogger().
 				WithFields(fields).
 				WithField(object.URIFieldError, err).
-				Error("Invalid trade request ID format - not a valid UUID or base62 ID")
+				Error("Invalid trade request ID format")
 			traceSpan.RecordError(err)
 			traceSpan.SetStatus(codes.Error, object.ErrUUIDerParse.Error())
 
@@ -197,12 +182,6 @@ func (h *tradeRequestHandler) GetTradeRequest(c echo.Context) error {
 		}
 	}
 
-	h.GetRuntimeLogger().
-		WithFields(fields).
-		WithField(object.URIFieldID, id).
-		Debug(object.URIEmpty)
-
-	// Get trade request using service
 	tradeRequest, err := h.GetServicer().Get(ctxWT, id)
 	if err != nil {
 		h.GetRuntimeLogger().
@@ -220,7 +199,6 @@ func (h *tradeRequestHandler) GetTradeRequest(c echo.Context) error {
 	return c.JSON(http.StatusOK, tradeRequest)
 }
 
-// ListTradeRequests implements TradeRequestHandler
 func (h *tradeRequestHandler) ListTradeRequests(c echo.Context) error {
 	ctx := c.Request().Context()
 	ctxWT, ctxWTCancelFunc := context.WithTimeout(ctx, object.NUMHTTPServerTimeout)
@@ -252,19 +230,13 @@ func (h *tradeRequestHandler) ListTradeRequests(c echo.Context) error {
 	pageToken := c.QueryParam("page_token")
 
 	if pageToken != object.URIEmpty {
-		h.GetRuntimeLogger().
-			WithFields(fields).
-			Debug(`pageToken != object.URIEmpty`)
-
-		cursorGobEncoderEncodeBase64URLEncodingDecode, errBase64URLEncodingDecode := base64.URLEncoding.DecodeString(
-			pageToken,
-		)
-		if errBase64URLEncodingDecode != nil {
+		cursorBytes, errDecode := base64.URLEncoding.DecodeString(pageToken)
+		if errDecode != nil {
 			h.GetRuntimeLogger().
 				WithFields(fields).
-				WithField(object.URIFieldError, errBase64URLEncodingDecode).
+				WithField(object.URIFieldError, errDecode).
 				Error(object.ErrBase64Decode.Error())
-			traceSpan.RecordError(errBase64URLEncodingDecode)
+			traceSpan.RecordError(errDecode)
 			traceSpan.SetStatus(codes.Error, object.ErrBase64Decode.Error())
 
 			return c.JSON(http.StatusBadRequest, map[string]string{
@@ -272,18 +244,7 @@ func (h *tradeRequestHandler) ListTradeRequests(c echo.Context) error {
 			})
 		}
 
-		h.GetRuntimeLogger().
-			WithFields(fields).
-			WithField(
-				object.URIFieldCursorGobEncoderEncodeBase64URLEncodingDecode,
-				cursorGobEncoderEncodeBase64URLEncodingDecode,
-			).
-			Debug(object.URIEmpty)
-
-		bytesBuffer := bytes.NewBuffer(cursorGobEncoderEncodeBase64URLEncodingDecode)
-		gobDecoder := gob.NewDecoder(bytesBuffer)
-
-		if err := gobDecoder.Decode(daoCursor); err != nil {
+		if err := gob.NewDecoder(bytes.NewBuffer(cursorBytes)).Decode(daoCursor); err != nil {
 			h.GetRuntimeLogger().
 				WithFields(fields).
 				WithField(object.URIFieldError, err).
@@ -295,11 +256,6 @@ func (h *tradeRequestHandler) ListTradeRequests(c echo.Context) error {
 		}
 	}
 
-	h.GetRuntimeLogger().
-		WithFields(fields).
-		WithField(object.URIFieldDAOCursor, daoCursor).
-		Debug(object.URIEmpty)
-
 	pageSize, err := strconv.Atoi(c.QueryParam("page_size"))
 	if err != nil {
 		h.GetRuntimeLogger().
@@ -308,6 +264,7 @@ func (h *tradeRequestHandler) ListTradeRequests(c echo.Context) error {
 			Error("Invalid page size")
 		traceSpan.RecordError(err)
 		traceSpan.SetStatus(codes.Error, "Invalid page size")
+
 		return c.JSON(http.StatusBadRequest, map[string]string{
 			"error": "Invalid page size",
 		})
@@ -315,25 +272,13 @@ func (h *tradeRequestHandler) ListTradeRequests(c echo.Context) error {
 
 	daoPagination := dao.NewPagination(daoCursor, uint32(pageSize))
 
-	h.GetRuntimeLogger().
-		WithFields(fields).
-		WithField(object.URIFieldDAOPagination, daoPagination).
-		Debug(object.URIEmpty)
-
-	// Create trade filter based on query parameters
-	// This is a simplified example - adjust based on your actual filter requirements
 	daoTradeFilter := dao.NewTradeFilter(
 		[]uuid.UUID{},
-		uuid.Nil, // Sender ID
-		uuid.Nil, // Receiver ID
+		uuid.Nil,
+		uuid.Nil,
 		"",
-		uuid.Nil, // Status
+		uuid.Nil,
 	)
-
-	h.GetRuntimeLogger().
-		WithFields(fields).
-		WithField("dao_trade_filter", daoTradeFilter).
-		Debug(object.URIEmpty)
 
 	tradeRequests, cursor, err := h.GetServicer().List(
 		ctxWT,
@@ -359,326 +304,6 @@ func (h *tradeRequestHandler) ListTradeRequests(c echo.Context) error {
 	})
 }
 
-// UpdateTradeRequest implements TradeRequestHandler
-func (h *tradeRequestHandler) UpdateTradeRequest(c echo.Context) error {
-	ctx := c.Request().Context()
-	ctxWT, ctxWTCancelFunc := context.WithTimeout(ctx, object.NUMHTTPServerTimeout)
-	defer ctxWTCancelFunc()
-
-	var traceSpan trace.Span
-	ctxWT, traceSpan = h.GetTracer().Start(
-		ctxWT,
-		"UpdateTradeRequest",
-		trace.WithSpanKind(trace.SpanKindServer),
-	)
-	defer traceSpan.End()
-
-	utilRuntimeContext := util.NewRuntimeContext(ctxWT)
-	utilSpanContext := util.NewSpanContext(traceSpan)
-	fields := map[string]any{
-		"name":   "UpdateTradeRequest",
-		"rt_ctx": utilRuntimeContext,
-		"sp_ctx": utilSpanContext,
-		"config": h.GetConfigger(),
-	}
-
-	h.GetRuntimeLogger().
-		WithFields(fields).
-		Info(object.URIEmpty)
-
-	// Parse ID from path parameter - could be UUID or base62 encoded
-	idStr := c.Param("id")
-	var id uuid.UUID
-	var err error
-
-	// Try parsing as standard UUID first
-	id, err = h.GetUUIDer().Parse(idStr)
-	if err != nil {
-		// If not a standard UUID, try parsing as base62
-		id, err = util.Base62ToUUID(idStr)
-		if err != nil {
-			h.GetRuntimeLogger().
-				WithFields(fields).
-				WithField(object.URIFieldError, err).
-				Error("Invalid trade request ID format - not a valid UUID or base62 ID")
-			traceSpan.RecordError(err)
-			traceSpan.SetStatus(codes.Error, object.ErrUUIDerParse.Error())
-
-			return c.JSON(http.StatusBadRequest, map[string]string{
-				"error": "Invalid trade request ID format",
-			})
-		}
-	}
-
-	h.GetRuntimeLogger().
-		WithFields(fields).
-		WithField(object.URIFieldID, id).
-		Debug(object.URIEmpty)
-
-	// Parse request body
-	var tradeRequest bo.TradeRequester
-	if err := c.Bind(&tradeRequest); err != nil {
-		h.GetRuntimeLogger().
-			WithFields(fields).
-			WithField(object.URIFieldError, err).
-			Error("Failed to parse request body")
-		traceSpan.RecordError(err)
-		traceSpan.SetStatus(codes.Error, "Failed to parse request body")
-
-		return c.JSON(http.StatusBadRequest, map[string]string{
-			"error": "Invalid request format",
-		})
-	}
-
-	// Update trade request using service
-	err = h.GetServicer().UpdateTradeRequest(ctxWT, id, tradeRequest)
-	if err != nil {
-		h.GetRuntimeLogger().
-			WithFields(fields).
-			WithField(object.URIFieldError, err).
-			Error("Failed to update trade request")
-		traceSpan.RecordError(err)
-		traceSpan.SetStatus(codes.Error, "Failed to update trade request")
-
-		return c.JSON(http.StatusInternalServerError, map[string]string{
-			"error": "Failed to update trade request",
-		})
-	}
-
-	return c.JSON(http.StatusOK, map[string]string{
-		"message": "Trade request updated successfully",
-	})
-}
-
-// DeleteTradeRequest implements TradeRequestHandler
-func (h *tradeRequestHandler) DeleteTradeRequest(c echo.Context) error {
-	ctx := c.Request().Context()
-	ctxWT, ctxWTCancelFunc := context.WithTimeout(ctx, object.NUMHTTPServerTimeout)
-	defer ctxWTCancelFunc()
-
-	var traceSpan trace.Span
-	ctxWT, traceSpan = h.GetTracer().Start(
-		ctxWT,
-		"DeleteTradeRequest",
-		trace.WithSpanKind(trace.SpanKindServer),
-	)
-	defer traceSpan.End()
-
-	utilRuntimeContext := util.NewRuntimeContext(ctxWT)
-	utilSpanContext := util.NewSpanContext(traceSpan)
-	fields := map[string]any{
-		"name":   "DeleteTradeRequest",
-		"rt_ctx": utilRuntimeContext,
-		"sp_ctx": utilSpanContext,
-		"config": h.GetConfigger(),
-	}
-
-	h.GetRuntimeLogger().
-		WithFields(fields).
-		Info(object.URIEmpty)
-
-	// Parse ID from path parameter - could be UUID or base62 encoded
-	idStr := c.Param("id")
-	var id uuid.UUID
-	var err error
-
-	// Try parsing as standard UUID first
-	id, err = h.GetUUIDer().Parse(idStr)
-	if err != nil {
-		// If not a standard UUID, try parsing as base62
-		id, err = util.Base62ToUUID(idStr)
-		if err != nil {
-			h.GetRuntimeLogger().
-				WithFields(fields).
-				WithField(object.URIFieldError, err).
-				Error("Invalid trade request ID format - not a valid UUID or base62 ID")
-			traceSpan.RecordError(err)
-			traceSpan.SetStatus(codes.Error, object.ErrUUIDerParse.Error())
-
-			return c.JSON(http.StatusBadRequest, map[string]string{
-				"error": "Invalid trade request ID format",
-			})
-		}
-	}
-
-	h.GetRuntimeLogger().
-		WithFields(fields).
-		WithField(object.URIFieldID, id).
-		Debug(object.URIEmpty)
-
-	// Delete trade request using service
-	err = h.GetServicer().DeleteTradeRequest(ctxWT, id)
-	if err != nil {
-		h.GetRuntimeLogger().
-			WithFields(fields).
-			WithField(object.URIFieldError, err).
-			Error("Failed to delete trade request")
-		traceSpan.RecordError(err)
-		traceSpan.SetStatus(codes.Error, "Failed to delete trade request")
-
-		return c.JSON(http.StatusInternalServerError, map[string]string{
-			"error": "Failed to delete trade request",
-		})
-	}
-
-	return c.JSON(http.StatusOK, map[string]string{
-		"message": "Trade request deleted successfully",
-	})
-}
-
-// AcceptTradeRequest implements TradeRequestHandler.
-func (h *tradeRequestHandler) AcceptTradeRequest(c echo.Context) error {
-	ctx := c.Request().Context()
-	ctxWT, ctxWTCancelFunc := context.WithTimeout(ctx, object.NUMHTTPServerTimeout)
-	defer ctxWTCancelFunc()
-
-	var traceSpan trace.Span
-	ctxWT, traceSpan = h.GetTracer().Start(
-		ctxWT,
-		"AcceptTradeRequest",
-		trace.WithSpanKind(trace.SpanKindServer),
-	)
-	defer traceSpan.End()
-
-	utilRuntimeContext := util.NewRuntimeContext(ctxWT)
-	utilSpanContext := util.NewSpanContext(traceSpan)
-	fields := map[string]any{
-		"name":   "AcceptTradeRequest",
-		"rt_ctx": utilRuntimeContext,
-		"sp_ctx": utilSpanContext,
-		"config": h.GetConfigger(),
-	}
-
-	h.GetRuntimeLogger().
-		WithFields(fields).
-		Info(object.URIEmpty)
-
-	// Parse ID from path parameter - could be UUID or base62 encoded
-	idStr := c.Param("id")
-	var id uuid.UUID
-	var err error
-
-	// Try parsing as standard UUID first
-	id, err = h.GetUUIDer().Parse(idStr)
-	if err != nil {
-		// If not a standard UUID, try parsing as base62
-		id, err = util.Base62ToUUID(idStr)
-		if err != nil {
-			h.GetRuntimeLogger().
-				WithFields(fields).
-				WithField(object.URIFieldError, err).
-				Error("Invalid trade request ID format - not a valid UUID or base62 ID")
-			traceSpan.RecordError(err)
-			traceSpan.SetStatus(codes.Error, object.ErrUUIDerParse.Error())
-
-			return c.JSON(http.StatusBadRequest, map[string]string{
-				"error": "Invalid trade request ID format",
-			})
-		}
-	}
-
-	h.GetRuntimeLogger().
-		WithFields(fields).
-		WithField(object.URIFieldID, id).
-		Debug(object.URIEmpty)
-
-	// Accept trade request using service
-	err = h.GetServicer().AcceptTradeRequest(ctxWT, id)
-	if err != nil {
-		h.GetRuntimeLogger().
-			WithFields(fields).
-			WithField(object.URIFieldError, err).
-			Error("Failed to accept trade request")
-		traceSpan.RecordError(err)
-		traceSpan.SetStatus(codes.Error, "Failed to accept trade request")
-
-		return c.JSON(http.StatusInternalServerError, map[string]string{
-			"error": "Failed to accept trade request",
-		})
-	}
-
-	return c.JSON(http.StatusOK, map[string]string{
-		"message": "Trade request accepted successfully",
-	})
-}
-
-// RejectTradeRequest implements TradeRequestHandler
-func (h *tradeRequestHandler) RejectTradeRequest(c echo.Context) error {
-	ctx := c.Request().Context()
-	ctxWT, ctxWTCancelFunc := context.WithTimeout(ctx, object.NUMHTTPServerTimeout)
-	defer ctxWTCancelFunc()
-
-	var traceSpan trace.Span
-	ctxWT, traceSpan = h.GetTracer().Start(
-		ctxWT,
-		"RejectTradeRequest",
-		trace.WithSpanKind(trace.SpanKindServer),
-	)
-	defer traceSpan.End()
-
-	utilRuntimeContext := util.NewRuntimeContext(ctxWT)
-	utilSpanContext := util.NewSpanContext(traceSpan)
-	fields := map[string]any{
-		"name":   "RejectTradeRequest",
-		"rt_ctx": utilRuntimeContext,
-		"sp_ctx": utilSpanContext,
-		"config": h.GetConfigger(),
-	}
-
-	h.GetRuntimeLogger().
-		WithFields(fields).
-		Info(object.URIEmpty)
-
-	// Parse ID from path parameter - could be UUID or base62 encoded
-	idStr := c.Param("id")
-	var id uuid.UUID
-	var err error
-
-	// Try parsing as standard UUID first
-	id, err = h.GetUUIDer().Parse(idStr)
-	if err != nil {
-		// If not a standard UUID, try parsing as base62
-		id, err = util.Base62ToUUID(idStr)
-		if err != nil {
-			h.GetRuntimeLogger().
-				WithFields(fields).
-				WithField(object.URIFieldError, err).
-				Error("Invalid trade request ID format - not a valid UUID or base62 ID")
-			traceSpan.RecordError(err)
-			traceSpan.SetStatus(codes.Error, object.ErrUUIDerParse.Error())
-
-			return c.JSON(http.StatusBadRequest, map[string]string{
-				"error": "Invalid trade request ID format",
-			})
-		}
-	}
-
-	h.GetRuntimeLogger().
-		WithFields(fields).
-		WithField(object.URIFieldID, id).
-		Debug(object.URIEmpty)
-
-	// Reject trade request using service
-	err = h.GetServicer().RejectTradeRequest(ctxWT, id)
-	if err != nil {
-		h.GetRuntimeLogger().
-			WithFields(fields).
-			WithField(object.URIFieldError, err).
-			Error("Failed to reject trade request")
-		traceSpan.RecordError(err)
-		traceSpan.SetStatus(codes.Error, "Failed to reject trade request")
-
-		return c.JSON(http.StatusInternalServerError, map[string]string{
-			"error": "Failed to reject trade request",
-		})
-	}
-
-	return c.JSON(http.StatusOK, map[string]string{
-		"message": "Trade request rejected successfully",
-	})
-}
-
-// GetTradeRequestsByGameID implements TradeRequestHandler
 func (h *tradeRequestHandler) GetTradeRequestsByGameID(c echo.Context) error {
 	ctx := c.Request().Context()
 	ctxWT, ctxWTCancelFunc := context.WithTimeout(ctx, object.NUMHTTPServerTimeout)
@@ -705,7 +330,6 @@ func (h *tradeRequestHandler) GetTradeRequestsByGameID(c echo.Context) error {
 		WithFields(fields).
 		Info(object.URIEmpty)
 
-	// Parse game ID from path parameter
 	gameIDStr := c.Param("game_id")
 	gameID, err := h.GetUUIDer().Parse(gameIDStr)
 	if err != nil {
@@ -721,67 +345,27 @@ func (h *tradeRequestHandler) GetTradeRequestsByGameID(c echo.Context) error {
 		})
 	}
 
-	h.GetRuntimeLogger().
-		WithFields(fields).
-		WithField("game_id", gameID).
-		Debug(object.URIEmpty)
-
-	// Handle pagination
 	daoCursor := dao.NewCursor(0)
 	pageToken := c.QueryParam("page_token")
 
 	if pageToken != object.URIEmpty {
-		h.GetRuntimeLogger().
-			WithFields(fields).
-			Debug(`pageToken != object.URIEmpty`)
-
-		cursorGobEncoderEncodeBase64URLEncodingDecode, errBase64URLEncodingDecode := base64.URLEncoding.DecodeString(
-			pageToken,
-		)
-		if errBase64URLEncodingDecode != nil {
-			h.GetRuntimeLogger().
-				WithFields(fields).
-				WithField(object.URIFieldError, errBase64URLEncodingDecode).
-				Error(object.ErrBase64Decode.Error())
-			traceSpan.RecordError(errBase64URLEncodingDecode)
-			traceSpan.SetStatus(codes.Error, object.ErrBase64Decode.Error())
-
-			return c.JSON(http.StatusBadRequest, map[string]string{
-				"error": "Invalid page token",
-			})
+		cursorBytes, errDecode := base64.URLEncoding.DecodeString(pageToken)
+		if errDecode != nil {
+			return c.JSON(http.StatusBadRequest, map[string]string{"error": "Invalid page token"})
 		}
 
-		bytesBuffer := bytes.NewBuffer(cursorGobEncoderEncodeBase64URLEncodingDecode)
-		gobDecoder := gob.NewDecoder(bytesBuffer)
-
-		if err := gobDecoder.Decode(daoCursor); err != nil {
-			h.GetRuntimeLogger().
-				WithFields(fields).
-				WithField(object.URIFieldError, err).
-				Error(object.ErrGobDecoderDecode.Error())
-			traceSpan.RecordError(err)
-			traceSpan.SetStatus(codes.Error, object.ErrGobDecoderDecode.Error())
-
+		if err := gob.NewDecoder(bytes.NewBuffer(cursorBytes)).Decode(daoCursor); err != nil {
 			return err
 		}
 	}
 
 	pageSize, err := strconv.Atoi(c.QueryParam("page_size"))
 	if err != nil {
-		h.GetRuntimeLogger().
-			WithFields(fields).
-			WithField(object.URIFieldError, err).
-			Error("Invalid page size")
-		traceSpan.RecordError(err)
-		traceSpan.SetStatus(codes.Error, "Invalid page size")
-		return c.JSON(http.StatusBadRequest, map[string]string{
-			"error": "Invalid page size",
-		})
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "Invalid page size"})
 	}
 
 	daoPagination := dao.NewPagination(daoCursor, uint32(pageSize))
 
-	// Get trade requests by game ID
 	tradeRequests, cursor, err := h.GetServicer().GetTradeRequestsByGameID(ctxWT, gameID, daoPagination)
 	if err != nil {
 		h.GetRuntimeLogger().
@@ -802,7 +386,6 @@ func (h *tradeRequestHandler) GetTradeRequestsByGameID(c echo.Context) error {
 	})
 }
 
-// GetTradeRequestsByPlayerID implements TradeRequestHandler
 func (h *tradeRequestHandler) GetTradeRequestsByPlayerID(c echo.Context) error {
 	ctx := c.Request().Context()
 	ctxWT, ctxWTCancelFunc := context.WithTimeout(ctx, object.NUMHTTPServerTimeout)
@@ -829,7 +412,6 @@ func (h *tradeRequestHandler) GetTradeRequestsByPlayerID(c echo.Context) error {
 		WithFields(fields).
 		Info(object.URIEmpty)
 
-	// Parse player ID from path parameter
 	playerIDStr := c.Param("player_id")
 	playerID, err := h.GetUUIDer().Parse(playerIDStr)
 	if err != nil {
@@ -845,67 +427,27 @@ func (h *tradeRequestHandler) GetTradeRequestsByPlayerID(c echo.Context) error {
 		})
 	}
 
-	h.GetRuntimeLogger().
-		WithFields(fields).
-		WithField("player_id", playerID).
-		Debug(object.URIEmpty)
-
-	// Handle pagination
 	daoCursor := dao.NewCursor(0)
 	pageToken := c.QueryParam("page_token")
 
 	if pageToken != object.URIEmpty {
-		h.GetRuntimeLogger().
-			WithFields(fields).
-			Debug(`pageToken != object.URIEmpty`)
-
-		cursorGobEncoderEncodeBase64URLEncodingDecode, errBase64URLEncodingDecode := base64.URLEncoding.DecodeString(
-			pageToken,
-		)
-		if errBase64URLEncodingDecode != nil {
-			h.GetRuntimeLogger().
-				WithFields(fields).
-				WithField(object.URIFieldError, errBase64URLEncodingDecode).
-				Error(object.ErrBase64Decode.Error())
-			traceSpan.RecordError(errBase64URLEncodingDecode)
-			traceSpan.SetStatus(codes.Error, object.ErrBase64Decode.Error())
-
-			return c.JSON(http.StatusBadRequest, map[string]string{
-				"error": "Invalid page token",
-			})
+		cursorBytes, errDecode := base64.URLEncoding.DecodeString(pageToken)
+		if errDecode != nil {
+			return c.JSON(http.StatusBadRequest, map[string]string{"error": "Invalid page token"})
 		}
 
-		bytesBuffer := bytes.NewBuffer(cursorGobEncoderEncodeBase64URLEncodingDecode)
-		gobDecoder := gob.NewDecoder(bytesBuffer)
-
-		if err := gobDecoder.Decode(daoCursor); err != nil {
-			h.GetRuntimeLogger().
-				WithFields(fields).
-				WithField(object.URIFieldError, err).
-				Error(object.ErrGobDecoderDecode.Error())
-			traceSpan.RecordError(err)
-			traceSpan.SetStatus(codes.Error, object.ErrGobDecoderDecode.Error())
-
+		if err := gob.NewDecoder(bytes.NewBuffer(cursorBytes)).Decode(daoCursor); err != nil {
 			return err
 		}
 	}
 
 	pageSize, err := strconv.Atoi(c.QueryParam("page_size"))
 	if err != nil {
-		h.GetRuntimeLogger().
-			WithFields(fields).
-			WithField(object.URIFieldError, err).
-			Error("Invalid page size")
-		traceSpan.RecordError(err)
-		traceSpan.SetStatus(codes.Error, "Invalid page size")
-		return c.JSON(http.StatusBadRequest, map[string]string{
-			"error": "Invalid page size",
-		})
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "Invalid page size"})
 	}
 
 	daoPagination := dao.NewPagination(daoCursor, uint32(pageSize))
 
-	// Get trade requests by player ID
 	tradeRequests, cursor, err := h.GetServicer().GetTradeRequestsByPlayerID(ctxWT, playerID, daoPagination)
 	if err != nil {
 		h.GetRuntimeLogger().
@@ -926,24 +468,12 @@ func (h *tradeRequestHandler) GetTradeRequestsByPlayerID(c echo.Context) error {
 	})
 }
 
-// RegisterRoutes implements Handler
 func (h *tradeRequestHandler) RegisterRoutes(e *echo.Echo) {
-	tradeRequestGroup := e.Group("/trade-requests")
+	g := e.Group("/api/v1/trade-requests")
+	g.POST("", h.CreateTradeRequest)
+	g.GET("", h.ListTradeRequests)
+	g.GET("/:id", h.GetTradeRequest)
 
-	// Single trade request routes
-	tradeRequestGroup.GET("/:id", h.GetTradeRequest)
-	tradeRequestGroup.PUT("/:id", h.UpdateTradeRequest)
-	tradeRequestGroup.DELETE("/:id", h.DeleteTradeRequest)
-	tradeRequestGroup.POST("/:id/accept", h.AcceptTradeRequest)
-	tradeRequestGroup.POST("/:id/reject", h.RejectTradeRequest)
-
-	// Collection routes
-	tradeRequestGroup.GET("", h.ListTradeRequests)
-	tradeRequestGroup.POST("", h.CreateTradeRequest)
-
-	// Game-specific routes
-	tradeRequestGroup.GET("/game/:game_id", h.GetTradeRequestsByGameID)
-
-	// Player-specific routes
-	tradeRequestGroup.GET("/player/:player_id", h.GetTradeRequestsByPlayerID)
+	e.GET("/api/v1/games/:game_id/trade-requests", h.GetTradeRequestsByGameID)
+	e.GET("/api/v1/players/:player_id/trade-requests", h.GetTradeRequestsByPlayerID)
 }

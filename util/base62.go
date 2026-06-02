@@ -2,7 +2,9 @@
 package util
 
 import (
+	"fmt"
 	"math/big"
+	"strings"
 
 	"github.com/google/uuid"
 )
@@ -36,9 +38,15 @@ func UUIDToBase62(id uuid.UUID) string {
 	return result
 }
 
-// Base62ToUUID converts a base62 string back to a UUID
-// This is the reverse operation of UUIDToBase62
+// Base62ToUUID converts a base62 string back to a UUID.
+// Returns an error if the string contains characters outside the base62 alphabet.
 func Base62ToUUID(s string) (uuid.UUID, error) {
+	for _, c := range s {
+		if !strings.ContainsRune(base62Chars, c) {
+			return uuid.Nil, fmt.Errorf("invalid base62 character: %q", c)
+		}
+	}
+
 	var i big.Int
 	base := big.NewInt(62)
 

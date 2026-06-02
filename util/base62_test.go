@@ -27,12 +27,12 @@ func TestUUIDToBase62(t *testing.T) {
 		{
 			name: "Random UUID 1",
 			uuid: uuid.MustParse("f47ac10b-58cc-4372-a567-0e02b2c3d479"),
-			want: "3odNFKDXqcJgvzf0aHhbQz",
+			want: "7RKE2sawAICsEsyZKHWW6r",
 		},
 		{
 			name: "Random UUID 2",
 			uuid: uuid.MustParse("550e8400-e29b-41d4-a716-446655440000"),
-			want: "2AJyxJiVHVrNMDDkiEIW0",
+			want: "2aUyqjCzEIiEcYMKj7TZtw",
 		},
 	}
 
@@ -65,13 +65,13 @@ func TestBase62ToUUID(t *testing.T) {
 		},
 		{
 			name:    "Random UUID 1",
-			base62:  "3odNFKDXqcJgvzf0aHhbQz",
+			base62:  "7RKE2sawAICsEsyZKHWW6r",
 			want:    uuid.MustParse("f47ac10b-58cc-4372-a567-0e02b2c3d479"),
 			wantErr: false,
 		},
 		{
 			name:    "Random UUID 2",
-			base62:  "2AJyxJiVHVrNMDDkiEIW0",
+			base62:  "2aUyqjCzEIiEcYMKj7TZtw",
 			want:    uuid.MustParse("550e8400-e29b-41d4-a716-446655440000"),
 			wantErr: false,
 		},

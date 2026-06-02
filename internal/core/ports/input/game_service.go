@@ -36,12 +36,6 @@ type (
 			context.Context,
 			uuid.UUID,
 		) error
-
-		// GetGameState retrieves the current state of a game
-		GetGameState(
-			context context.Context,
-			id uuid.UUID,
-		) (bo.Gamer, error)
 	}
 
 	// GetGameServicer is an interface.

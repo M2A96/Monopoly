@@ -84,7 +84,7 @@ func (g *gameService) GetTracer() trace.Tracer {
 	return g.traceTracer
 }
 
-// GetAddressRepositorier implements output.GetGameRepositorier.
+// GetGameRepositorier implements output.GetGameRepositorier.
 func (g *gameService) GetGameRepositorier() output.GameRepositorier {
 	return g.repositoryGameRepositorier
 }
@@ -238,37 +238,6 @@ func (service *gameService) Get(
 		Debug(object.URIEmpty)
 
 	return boGame, nil
-}
-
-// GetGameState implements input.GameServicer.
-func (service *gameService) GetGameState(
-	ctx context.Context,
-	gameID uuid.UUID,
-) (bo.Gamer, error) {
-	var traceSpan trace.Span
-
-	ctx, traceSpan = service.GetTracer().Start(
-		ctx,
-		"GetGameState",
-		trace.WithSpanKind(trace.SpanKindInternal),
-	)
-	defer traceSpan.End()
-
-	utilRuntimeContext := util.NewRuntimeContext(ctx)
-	utilSpanContext := util.NewSpanContext(traceSpan)
-	fields := map[string]any{
-		"name":    "GetGameState",
-		"rt_ctx":  utilRuntimeContext,
-		"sp_ctx":  utilSpanContext,
-		"config":  service.GetConfigger(),
-		"game_id": gameID,
-	}
-
-	service.GetRuntimeLogger().
-		WithFields(fields).
-		Info(object.URIEmpty)
-
-	return service.Get(ctx, gameID)
 }
 
 // List implements input.GameServicer.

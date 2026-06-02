@@ -10,6 +10,7 @@ import (
 
 type (
 	Player interface {
+		BOer
 		GetName() string
 		GetBalance() int
 		GetPosition() int
@@ -21,6 +22,7 @@ type (
 
 	// player represents a player in the game
 	player struct {
+		bo
 		name      string
 		balance   int
 		position  int
@@ -83,6 +85,7 @@ func NewPlayer(
 	bankrupt bool,
 ) *player {
 	return &player{
+		bo:        *NewBO(id),
 		name:      name,
 		balance:   balance,
 		position:  position,

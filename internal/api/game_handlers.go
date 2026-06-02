@@ -20,20 +20,19 @@ import (
 )
 
 type (
-    // createGameRequest is the DTO for creating a game via API
-    createGameRequest struct {
-        Name            string    `json:"name"`
-        Status          string    `json:"status"`
-        CurrentPlayerID uuid.UUID `json:"current_player_id"`
-        WinnerID        uuid.UUID `json:"winner_id"`
-    }
-
-    GameHandler interface {
-        GetGame(c echo.Context) error
-        StartGame(c echo.Context) error
-        GetGameState(c echo.Context) error
-        CreateGame(c echo.Context) error
+	createGameRequest struct {
+		Name            string    `json:"name"`
+		Status          string    `json:"status"`
+		CurrentPlayerID uuid.UUID `json:"current_player_id"`
+		WinnerID        uuid.UUID `json:"winner_id"`
 	}
+
+	GameHandler interface {
+		GetGame(c echo.Context) error
+		StartGame(c echo.Context) error
+		CreateGame(c echo.Context) error
+	}
+
 	gameHandler struct {
 		handler[input.GameServicer]
 	}
@@ -240,93 +239,6 @@ func (h *gameHandler) GetGame(c echo.Context) error {
 	return c.JSON(http.StatusOK, newGame.GetMap())
 }
 
-// GetGameState implements GameHandler.
-func (h *gameHandler) GetGameState(c echo.Context) error {
-	ctx := c.Request().Context()
-	ctxWT, ctxWTCancelFunc := context.WithTimeout(ctx, object.NUMHTTPServerTimeout)
-	defer ctxWTCancelFunc()
-
-	var traceSpan trace.Span
-	ctxWT, traceSpan = h.GetTracer().Start(
-		ctxWT,
-		"GetGameState",
-		trace.WithSpanKind(trace.SpanKindServer),
-	)
-	defer traceSpan.End()
-
-	utilRuntimeContext := util.NewRuntimeContext(ctxWT)
-	utilSpanContext := util.NewSpanContext(traceSpan)
-	fields := map[string]any{
-		"name":   "GetGameState",
-		"rt_ctx": utilRuntimeContext,
-		"sp_ctx": utilSpanContext,
-		"config": h.GetConfigger(),
-	}
-
-	h.GetRuntimeLogger().
-		WithFields(fields).
-		Info(object.URIEmpty)
-
-	// Parse ID from path parameter - could be UUID or base62 encoded
-	idStr := c.Param("id")
-	var id uuid.UUID
-	var err error
-
-	// Try parsing as standard UUID first
-	id, err = h.GetUUIDer().Parse(idStr)
-	if err != nil {
-		// If not a standard UUID, try parsing as base62
-		id, err = util.Base62ToUUID(idStr)
-		if err != nil {
-			h.GetRuntimeLogger().
-				WithFields(fields).
-				WithField(object.URIFieldError, err).
-				Error("Invalid game ID format - not a valid UUID or base62 ID")
-			traceSpan.RecordError(err)
-			traceSpan.SetStatus(codes.Error, object.ErrUUIDerParse.Error())
-
-			return c.JSON(http.StatusBadRequest, map[string]string{
-				"error": "Invalid game ID format",
-			})
-		}
-	}
-
-	h.GetRuntimeLogger().
-		WithFields(fields).
-		WithField(object.URIFieldID, id).
-		Debug(object.URIEmpty)
-
-	// Get game state using service
-	gameState, err := h.GetServicer().GetGameState(ctxWT, id)
-	if err != nil {
-		h.GetRuntimeLogger().
-			WithFields(fields).
-			WithField(object.URIFieldError, err).
-			Error(object.ErrGameServiceGetState.Error())
-		traceSpan.RecordError(err)
-		traceSpan.SetStatus(codes.Error, object.ErrGameServiceGetState.Error())
-
-		return c.JSON(http.StatusInternalServerError, map[string]string{
-			"error": "Failed to retrieve game state",
-		})
-	}
-
-	boGame := bo.NewGamer(
-		gameState.GetID(),
-		gameState.GetName(),
-		gameState.GetStatus(),
-		gameState.GetCurrentPlayerID(),
-		gameState.GetWinnerID(),
-	)
-
-	h.GetRuntimeLogger().
-		WithFields(fields).
-		WithField(object.URIFieldResponse, boGame).
-		Debug(object.URIEmpty)
-
-    return c.JSON(http.StatusOK, boGame.GetMap())
-}
-
 // StartGame implements GameHandler.
 func (h *gameHandler) StartGame(c echo.Context) error {
 	ctx := c.Request().Context()
@@ -411,6 +323,5 @@ func (h *gameHandler) StartGame(c echo.Context) error {
 func (h *gameHandler) RegisterRoutes(e *echo.Echo) {
 	e.GET("/api/v1/games/:id", h.GetGame)
 	e.POST("/api/v1/games/:id/start", h.StartGame)
-	e.GET("/api/v1/games/:id/state", h.GetGameState)
 	e.POST("/api/v1/games", h.CreateGame)
 }

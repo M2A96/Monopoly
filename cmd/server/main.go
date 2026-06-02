@@ -113,7 +113,9 @@ func main() {
 	)
 	logRuntimeLog := log.NewRuntimeLog(
 		configConfig,
-		map[string]any{},
+		map[string]any{
+			"service_name": viper.GetString("OTEL_SERVICE_NAME"),
+		},
 		zapLogger.WithOptions(zap.AddCallerSkip(1)),
 	)
 	objectUUID := object.NewUUID()
@@ -324,6 +326,15 @@ func main() {
 			),
 			services.WithGameLogServiceTimer(objectTime),
 		),
+		services.WithGameStateService(
+			configConfig,
+			logRuntimeLog,
+			objectUUID,
+			traceTracer,
+			services.WithGameStateServiceGameStateRepositorier(
+				repositoryRepository.GetGameStateRepositorier(),
+			),
+		),
 		services.WithTradeRequestService(
 			configConfig,
 			logRuntimeLog,
@@ -337,6 +348,7 @@ func main() {
 	)
 
 	healthHandler := api.NewHealthHandler(sqlDB)
+
 	gameHandler := api.NewGameHandler(
 		configConfig,
 		logRuntimeLog,
@@ -347,15 +359,74 @@ func main() {
 		),
 	)
 
+	playerHandler := api.NewPlayerHandler(
+		configConfig,
+		logRuntimeLog,
+		objectUUID,
+		traceTracer,
+		api.WithPlayerHandlerPlayerServicer(
+			serviceService.GetPlayerServicer(),
+		),
+	)
+
+	propertyHandler := api.NewPropertyHandler(
+		configConfig,
+		logRuntimeLog,
+		objectUUID,
+		traceTracer,
+		api.WithPropertyHandlerPropertyServicer(
+			serviceService.GetPropertyServicer(),
+		),
+	)
+
+	gameLogHandler := api.NewGameLogHandler(
+		configConfig,
+		logRuntimeLog,
+		objectUUID,
+		traceTracer,
+		api.WithGameLogHandlerGameLogServicer(
+			serviceService.GetGameLogServicer(),
+		),
+	)
+
+	gameStateHandler := api.NewGameStateHandler(
+		configConfig,
+		logRuntimeLog,
+		objectUUID,
+		traceTracer,
+		api.WithGameStateHandlerGameStateServicer(
+			serviceService.GetGameStateServicer(),
+		),
+	)
+
+	tradeRequestHandler := api.NewTradeRequestHandler(
+		configConfig,
+		logRuntimeLog,
+		objectUUID,
+		traceTracer,
+		api.WithTradeRequestHandlerTradeRequestServicer(
+			serviceService.GetTradeRequestServicer(),
+		),
+	)
+
 	e := echo.New()
+	e.Use(api.RequestIDMiddleware())
+	e.Use(api.CorrelationIDMiddleware())
+	e.Use(api.StructuredLogMiddleware(logRuntimeLog, viper.GetString("OTEL_SERVICE_NAME")))
+
 	for _, handler := range []api.Handler{
 		healthHandler,
 		gameHandler,
+		playerHandler,
+		propertyHandler,
+		gameLogHandler,
+		gameStateHandler,
+		tradeRequestHandler,
 	} {
 		handler.RegisterRoutes(e)
 	}
+
 	e.Start(
 		configConfig.GetServerConfigger().GetEndpointConfigger().GetAddr(),
 	)
-
 }

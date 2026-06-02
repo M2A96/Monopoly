@@ -1,32 +1,28 @@
-// internal/api/game_state_handlers.go
 package api
 
 import (
-    "context"
-    "net/http"
-    "strconv"
+	"context"
+	"net/http"
+	"strconv"
 
-    "github/M2A96/Monopoly.git/config"
-    "github/M2A96/Monopoly.git/internal/core/domain/bo"
-    "github/M2A96/Monopoly.git/internal/core/ports/input"
-    "github/M2A96/Monopoly.git/log"
-    "github/M2A96/Monopoly.git/object"
-    "github/M2A96/Monopoly.git/object/dao"
-    "github/M2A96/Monopoly.git/util"
+	"github/M2A96/Monopoly.git/config"
+	"github/M2A96/Monopoly.git/internal/core/ports/input"
+	"github/M2A96/Monopoly.git/log"
+	"github/M2A96/Monopoly.git/object"
+	"github/M2A96/Monopoly.git/object/dao"
+	"github/M2A96/Monopoly.git/util"
 
-    "go.opentelemetry.io/otel/codes"
-    "go.opentelemetry.io/otel/trace"
+	"go.opentelemetry.io/otel/codes"
+	"go.opentelemetry.io/otel/trace"
 
-    "github.com/google/uuid"
-    "github.com/labstack/echo/v4"
+	"github.com/google/uuid"
+	"github.com/labstack/echo/v4"
 )
 
 type (
 	GameStateHandler interface {
 		GetCurrentState(c echo.Context) error
-		SaveGameState(c echo.Context) error
 		GetGameStateHistory(c echo.Context) error
-		RestoreGameState(c echo.Context) error
 	}
 
 	gameStateHandler struct {
@@ -41,7 +37,6 @@ var (
 	_ GameStateHandler = (*gameStateHandler)(nil)
 )
 
-// NewGameStateHandler creates a new game state handler instance
 func NewGameStateHandler(
 	configConfigger config.Configger,
 	logRuntimeLogger log.RuntimeLogger,
@@ -60,14 +55,12 @@ func NewGameStateHandler(
 	}
 }
 
-// WithGameStateHandlerGameStateServicer sets the game state servicer for the handler
 func WithGameStateHandlerGameStateServicer(
 	serviceGameStateServicer input.GameStateServicer,
 ) gameStateHandlerOptioner {
 	return WithHandlerServicer[input.GameStateServicer](serviceGameStateServicer)
 }
 
-// GetCurrentState retrieves the current state of a game
 func (h *gameStateHandler) GetCurrentState(c echo.Context) error {
 	ctx := c.Request().Context()
 	ctxWT, ctxWTCancelFunc := context.WithTimeout(ctx, object.NUMHTTPServerTimeout)
@@ -94,21 +87,18 @@ func (h *gameStateHandler) GetCurrentState(c echo.Context) error {
 		WithFields(fields).
 		Info(object.URIEmpty)
 
-	// Parse ID from path parameter - could be UUID or base62 encoded
 	idStr := c.Param("id")
 	var id uuid.UUID
 	var err error
 
-	// Try parsing as standard UUID first
 	id, err = h.GetUUIDer().Parse(idStr)
 	if err != nil {
-		// If not a standard UUID, try parsing as base62
 		id, err = util.Base62ToUUID(idStr)
 		if err != nil {
 			h.GetRuntimeLogger().
 				WithFields(fields).
 				WithField(object.URIFieldError, err).
-				Error("Invalid game ID format - not a valid UUID or base62 ID")
+				Error("Invalid game ID format")
 			traceSpan.RecordError(err)
 			traceSpan.SetStatus(codes.Error, object.ErrUUIDerParse.Error())
 
@@ -118,102 +108,23 @@ func (h *gameStateHandler) GetCurrentState(c echo.Context) error {
 		}
 	}
 
-	h.GetRuntimeLogger().
-		WithFields(fields).
-		WithField(object.URIFieldID, id).
-		Debug(object.URIEmpty)
-
-	// Call service to get current game state
-    gameState, err := h.GetServicer().GetCurrentState(ctxWT, id)
-    if err != nil {
-        h.GetRuntimeLogger().
-            WithFields(fields).
-            WithField(object.URIFieldError, err).
-            Error("Failed to get current game state")
-        traceSpan.RecordError(err)
-        traceSpan.SetStatus(codes.Error, "Failed to get current game state")
-
-        return c.JSON(http.StatusInternalServerError, map[string]string{
-            "error": "Failed to get current game state",
-        })
-    }
-
-	h.GetRuntimeLogger().
-		WithFields(fields).
-		WithField(object.URIFieldResponse, gameState).
-		Debug(object.URIEmpty)
-
-	return c.JSON(http.StatusOK, gameState)
-}
-
-// SaveGameState saves the current state of a game
-func (h *gameStateHandler) SaveGameState(c echo.Context) error {
-	ctx := c.Request().Context()
-	ctxWT, ctxWTCancelFunc := context.WithTimeout(ctx, object.NUMHTTPServerTimeout)
-	defer ctxWTCancelFunc()
-
-	var traceSpan trace.Span
-	ctxWT, traceSpan = h.GetTracer().Start(
-		ctxWT,
-		"SaveGameState",
-		trace.WithSpanKind(trace.SpanKindServer),
-	)
-	defer traceSpan.End()
-
-	utilRuntimeContext := util.NewRuntimeContext(ctxWT)
-	utilSpanContext := util.NewSpanContext(traceSpan)
-	fields := map[string]any{
-		"name":   "SaveGameState",
-		"rt_ctx": utilRuntimeContext,
-		"sp_ctx": utilSpanContext,
-		"config": h.GetConfigger(),
-	}
-
-	h.GetRuntimeLogger().
-		WithFields(fields).
-		Info(object.URIEmpty)
-
-	// Parse request body
-	var gameState bo.GameStater
-	if err := c.Bind(&gameState); err != nil {
-		h.GetRuntimeLogger().
-			WithFields(fields).
-			WithField(object.URIFieldError, err).
-			Error("Failed to parse request body")
-		traceSpan.RecordError(err)
-		traceSpan.SetStatus(codes.Error, "Failed to parse request body")
-
-		return c.JSON(http.StatusBadRequest, map[string]string{
-			"error": "Invalid request format",
-		})
-	}
-
-	// Save game state using service
-	err := h.GetServicer().SaveGameState(ctxWT, gameState)
+	gameState, err := h.GetServicer().GetCurrentState(ctxWT, id)
 	if err != nil {
 		h.GetRuntimeLogger().
 			WithFields(fields).
 			WithField(object.URIFieldError, err).
-			Error("Failed to save game state")
+			Error("Failed to get current game state")
 		traceSpan.RecordError(err)
-		traceSpan.SetStatus(codes.Error, "Failed to save game state")
+		traceSpan.SetStatus(codes.Error, "Failed to get current game state")
 
 		return c.JSON(http.StatusInternalServerError, map[string]string{
-			"error": "Failed to save game state",
+			"error": "Failed to get current game state",
 		})
 	}
 
-	h.GetRuntimeLogger().
-		WithFields(fields).
-		WithField("game_id", gameState.GetGame().GetID()).
-		Debug("Game state saved successfully")
-
-	return c.JSON(http.StatusOK, map[string]string{
-		"message": "Game state saved successfully",
-	})
+	return c.JSON(http.StatusOK, gameState)
 }
 
-// GetGameStateHistory retrieves the history of game states
 func (h *gameStateHandler) GetGameStateHistory(c echo.Context) error {
 	ctx := c.Request().Context()
 	ctxWT, ctxWTCancelFunc := context.WithTimeout(ctx, object.NUMHTTPServerTimeout)
@@ -240,21 +151,18 @@ func (h *gameStateHandler) GetGameStateHistory(c echo.Context) error {
 		WithFields(fields).
 		Info(object.URIEmpty)
 
-	// Parse ID from path parameter - could be UUID or base62 encoded
 	idStr := c.Param("id")
 	var id uuid.UUID
 	var err error
 
-	// Try parsing as standard UUID first
 	id, err = h.GetUUIDer().Parse(idStr)
 	if err != nil {
-		// If not a standard UUID, try parsing as base62
 		id, err = util.Base62ToUUID(idStr)
 		if err != nil {
 			h.GetRuntimeLogger().
 				WithFields(fields).
 				WithField(object.URIFieldError, err).
-				Error("Invalid game ID format - not a valid UUID or base62 ID")
+				Error("Invalid game ID format")
 			traceSpan.RecordError(err)
 			traceSpan.SetStatus(codes.Error, object.ErrUUIDerParse.Error())
 
@@ -264,186 +172,54 @@ func (h *gameStateHandler) GetGameStateHistory(c echo.Context) error {
 		}
 	}
 
-    // Parse pagination parameters (offset + limit)
-    // Default values: offset=0, limit=10
-    offset := 0
-    if cursorParam := c.QueryParam("cursor"); cursorParam != "" {
-        if v, err := strconv.Atoi(cursorParam); err == nil && v >= 0 {
-            offset = v
-        }
-    }
+	offset := 0
+	if cursorParam := c.QueryParam("cursor"); cursorParam != "" {
+		if v, err := strconv.Atoi(cursorParam); err == nil && v >= 0 {
+			offset = v
+		}
+	}
 
-    limit := 10
-    if limitParam := c.QueryParam("limit"); limitParam != "" {
-        if v, err := strconv.Atoi(limitParam); err == nil && v > 0 {
-            limit = v
-        }
-    }
+	limit := 10
+	if limitParam := c.QueryParam("limit"); limitParam != "" {
+		if v, err := strconv.Atoi(limitParam); err == nil && v > 0 {
+			limit = v
+		}
+	}
 
-    daoCursor := dao.NewCursor(uint32(offset))
-    pagination := dao.NewPagination(daoCursor, uint32(limit))
+	daoCursor := dao.NewCursor(uint32(offset))
+	pagination := dao.NewPagination(daoCursor, uint32(limit))
 
-	h.GetRuntimeLogger().
-		WithFields(fields).
-		WithField(object.URIFieldID, id).
-		WithField("pagination", pagination).
-		Debug(object.URIEmpty)
+	filter := dao.NewGameStateFilter(id, nil, nil)
+	gameStates, nextCursor, err := h.GetServicer().GetGameStateHistory(ctxWT, filter, pagination)
+	if err != nil {
+		h.GetRuntimeLogger().
+			WithFields(fields).
+			WithField(object.URIFieldError, err).
+			Error("Failed to get game state history")
+		traceSpan.RecordError(err)
+		traceSpan.SetStatus(codes.Error, "Failed to get game state history")
 
-    // Build filter and call service to get game state history
-    filter := dao.NewGameStateFilter(id, nil, nil)
-    gameStates, nextCursor, err := h.GetServicer().GetGameStateHistory(ctxWT, filter, pagination)
-    if err != nil {
-        h.GetRuntimeLogger().
-            WithFields(fields).
-            WithField(object.URIFieldError, err).
-            Error("Failed to get game state history")
-        traceSpan.RecordError(err)
-        traceSpan.SetStatus(codes.Error, "Failed to get game state history")
+		return c.JSON(http.StatusInternalServerError, map[string]string{
+			"error": "Failed to get game state history",
+		})
+	}
 
-        return c.JSON(http.StatusInternalServerError, map[string]string{
-            "error": "Failed to get game state history",
-        })
-    }
+	response := map[string]interface{}{
+		"game_states": gameStates,
+		"pagination": map[string]interface{}{
+			"limit":  limit,
+			"cursor": daoCursor,
+		},
+	}
 
-	// Prepare response with pagination info
-    response := map[string]interface{}{
-        "game_states": gameStates,
-        "pagination": map[string]interface{}{
-            "limit":  limit,
-            "cursor": daoCursor,
-        },
-    }
-
-    // Include next cursor if provided by service
-    if nextCursor != nil {
-        response["pagination"].(map[string]interface{})["next_cursor"] = nextCursor
-    }
-
-	h.GetRuntimeLogger().
-		WithFields(fields).
-		WithField(object.URIFieldResponse, response).
-		Debug(object.URIEmpty)
+	if nextCursor != nil {
+		response["pagination"].(map[string]interface{})["next_cursor"] = nextCursor
+	}
 
 	return c.JSON(http.StatusOK, response)
 }
 
-// RestoreGameState restores a game to a previous state
-func (h *gameStateHandler) RestoreGameState(c echo.Context) error {
-	ctx := c.Request().Context()
-	ctxWT, ctxWTCancelFunc := context.WithTimeout(ctx, object.NUMHTTPServerTimeout)
-	defer ctxWTCancelFunc()
-
-	var traceSpan trace.Span
-	ctxWT, traceSpan = h.GetTracer().Start(
-		ctxWT,
-		"RestoreGameState",
-		trace.WithSpanKind(trace.SpanKindServer),
-	)
-	defer traceSpan.End()
-
-	utilRuntimeContext := util.NewRuntimeContext(ctxWT)
-	utilSpanContext := util.NewSpanContext(traceSpan)
-	fields := map[string]any{
-		"name":   "RestoreGameState",
-		"rt_ctx": utilRuntimeContext,
-		"sp_ctx": utilSpanContext,
-		"config": h.GetConfigger(),
-	}
-
-	h.GetRuntimeLogger().
-		WithFields(fields).
-		Info(object.URIEmpty)
-
-	// Parse game ID from path parameter
-	gameIDStr := c.Param("id")
-	var gameID uuid.UUID
-	var err error
-
-	// Try parsing as standard UUID first
-	gameID, err = h.GetUUIDer().Parse(gameIDStr)
-	if err != nil {
-		// If not a standard UUID, try parsing as base62
-		gameID, err = util.Base62ToUUID(gameIDStr)
-		if err != nil {
-			h.GetRuntimeLogger().
-				WithFields(fields).
-				WithField(object.URIFieldError, err).
-				Error("Invalid game ID format - not a valid UUID or base62 ID")
-			traceSpan.RecordError(err)
-			traceSpan.SetStatus(codes.Error, object.ErrUUIDerParse.Error())
-
-			return c.JSON(http.StatusBadRequest, map[string]string{
-				"error": "Invalid game ID format",
-			})
-		}
-	}
-
-	// Parse state ID from path parameter
-	stateIDStr := c.Param("state_id")
-	var stateID uuid.UUID
-
-	// Try parsing as standard UUID first
-	stateID, err = h.GetUUIDer().Parse(stateIDStr)
-	if err != nil {
-		// If not a standard UUID, try parsing as base62
-		stateID, err = util.Base62ToUUID(stateIDStr)
-		if err != nil {
-			h.GetRuntimeLogger().
-				WithFields(fields).
-				WithField(object.URIFieldError, err).
-				Error("Invalid state ID format - not a valid UUID or base62 ID")
-			traceSpan.RecordError(err)
-			traceSpan.SetStatus(codes.Error, object.ErrUUIDerParse.Error())
-
-			return c.JSON(http.StatusBadRequest, map[string]string{
-				"error": "Invalid state ID format",
-			})
-		}
-	}
-
-	h.GetRuntimeLogger().
-		WithFields(fields).
-		WithField("game_id", gameID).
-		WithField("state_id", stateID).
-		Debug(object.URIEmpty)
-
-	// Call service to restore game state
-    err = h.GetServicer().RestoreGameState(ctxWT, gameID, stateID)
-    if err != nil {
-        h.GetRuntimeLogger().
-            WithFields(fields).
-            WithField(object.URIFieldError, err).
-            Error("Failed to restore game state")
-        traceSpan.RecordError(err)
-        traceSpan.SetStatus(codes.Error, "Failed to restore game state")
-
-        return c.JSON(http.StatusInternalServerError, map[string]string{
-            "error": "Failed to restore game state",
-        })
-    }
-
-	h.GetRuntimeLogger().
-		WithFields(fields).
-		WithField("game_id", gameID).
-		WithField("state_id", stateID).
-		Debug("Game state restored successfully")
-
-	return c.JSON(http.StatusOK, map[string]string{
-		"message": "Game state restored successfully",
-	})
-}
-
-// RegisterRoutes implements Handler.
 func (h *gameStateHandler) RegisterRoutes(e *echo.Echo) {
-    // Current state of a game
-    e.GET("/api/v1/games/:id/state/current", h.GetCurrentState)
-
-    // Save current game state
-    e.POST("/api/v1/games/:id/state/save", h.SaveGameState)
-
-    // Game state history with pagination
-    e.GET("/api/v1/games/:id/states", h.GetGameStateHistory)
-
-    // Restore a specific saved state
-    e.POST("/api/v1/games/:id/state/:state_id/restore", h.RestoreGameState)
+	e.GET("/api/v1/games/:id/state/current", h.GetCurrentState)
+	e.GET("/api/v1/games/:id/states", h.GetGameStateHistory)
 }

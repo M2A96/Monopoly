@@ -1,4 +1,3 @@
-// internal/api/player_handlers.go
 package api
 
 import (
@@ -29,8 +28,6 @@ type (
 		GetPlayer(c echo.Context) error
 		ListPlayers(c echo.Context) error
 		CreatePlayer(c echo.Context) error
-		UpdatePlayer(c echo.Context) error
-		DeletePlayer(c echo.Context) error
 	}
 
 	playerHandler struct {
@@ -45,7 +42,6 @@ var (
 	_ PlayerHandler = (*playerHandler)(nil)
 )
 
-// NewPlayerHandler creates a new player handler instance
 func NewPlayerHandler(
 	configConfigger config.Configger,
 	logRuntimeLogger log.RuntimeLogger,
@@ -64,14 +60,12 @@ func NewPlayerHandler(
 	}
 }
 
-// WithPlayerHandlerPlayerServicer sets the player service for the handler
 func WithPlayerHandlerPlayerServicer(
 	servicePlayerServicer input.PlayerServicer,
 ) playerHandlerOptioner {
 	return WithHandlerServicer[input.PlayerServicer](servicePlayerServicer)
 }
 
-// CreatePlayer implements PlayerHandler
 func (h *playerHandler) CreatePlayer(c echo.Context) error {
 	ctx := c.Request().Context()
 	ctxWT, ctxWTCancelFunc := context.WithTimeout(ctx, object.NUMHTTPServerTimeout)
@@ -98,7 +92,6 @@ func (h *playerHandler) CreatePlayer(c echo.Context) error {
 		WithFields(fields).
 		Info(object.URIEmpty)
 
-	// Parse request body
 	var player bo.Player
 	if err := c.Bind(&player); err != nil {
 		h.GetRuntimeLogger().
@@ -113,8 +106,7 @@ func (h *playerHandler) CreatePlayer(c echo.Context) error {
 		})
 	}
 
-	// Create player using service
-	newPlayerId, err := h.GetServicer().CreatePlayer(ctxWT, player)
+	newPlayerID, err := h.GetServicer().CreatePlayer(ctxWT, player)
 	if err != nil {
 		h.GetRuntimeLogger().
 			WithFields(fields).
@@ -130,13 +122,14 @@ func (h *playerHandler) CreatePlayer(c echo.Context) error {
 
 	h.GetRuntimeLogger().
 		WithFields(fields).
-		WithField(object.URIFieldResponse, newPlayerId).
+		WithField(object.URIFieldResponse, newPlayerID).
 		Debug(object.URIEmpty)
 
-	return c.JSON(http.StatusCreated, newPlayerId)
+	return c.JSON(http.StatusCreated, map[string]string{
+		"id": newPlayerID.String(),
+	})
 }
 
-// GetPlayer implements PlayerHandler
 func (h *playerHandler) GetPlayer(c echo.Context) error {
 	ctx := c.Request().Context()
 	ctxWT, ctxWTCancelFunc := context.WithTimeout(ctx, object.NUMHTTPServerTimeout)
@@ -163,7 +156,6 @@ func (h *playerHandler) GetPlayer(c echo.Context) error {
 		WithFields(fields).
 		Info(object.URIEmpty)
 
-	// Parse UUID from path parameter
 	idStr := c.Param("id")
 	id, err := h.GetUUIDer().Parse(idStr)
 	if err != nil {
@@ -184,7 +176,6 @@ func (h *playerHandler) GetPlayer(c echo.Context) error {
 		WithField(object.URIFieldID, id).
 		Debug(object.URIEmpty)
 
-	// Get player using service
 	player, err := h.GetServicer().Get(ctxWT, id)
 	if err != nil {
 		h.GetRuntimeLogger().
@@ -202,7 +193,6 @@ func (h *playerHandler) GetPlayer(c echo.Context) error {
 	return c.JSON(http.StatusOK, player)
 }
 
-// ListPlayers implements PlayerHandler
 func (h *playerHandler) ListPlayers(c echo.Context) error {
 	ctx := c.Request().Context()
 	ctxWT, ctxWTCancelFunc := context.WithTimeout(ctx, object.NUMHTTPServerTimeout)
@@ -234,38 +224,21 @@ func (h *playerHandler) ListPlayers(c echo.Context) error {
 	pageToken := c.QueryParam("page_token")
 
 	if pageToken != object.URIEmpty {
-		h.GetRuntimeLogger().
-			WithFields(fields).
-			Debug(`apiv1GameServiceListRequest.GetPageToken() != object.URIEmpty`)
-
-		cursorGobEncoderEncodeBase64URLEncodingDecode, errBase64URLEncodingDecode := base64.URLEncoding.DecodeString(
-			pageToken,
-		)
-		if errBase64URLEncodingDecode != nil {
+		cursorBytes, errDecode := base64.URLEncoding.DecodeString(pageToken)
+		if errDecode != nil {
 			h.GetRuntimeLogger().
 				WithFields(fields).
-				WithField(object.URIFieldError, errBase64URLEncodingDecode).
+				WithField(object.URIFieldError, errDecode).
 				Error(object.ErrBase64Decode.Error())
-			traceSpan.RecordError(errBase64URLEncodingDecode)
+			traceSpan.RecordError(errDecode)
 			traceSpan.SetStatus(codes.Error, object.ErrBase64Decode.Error())
 
 			return c.JSON(http.StatusBadRequest, map[string]string{
-				"error": "Invalid page size",
+				"error": "Invalid page token",
 			})
 		}
 
-		h.GetRuntimeLogger().
-			WithFields(fields).
-			WithField(
-				object.URIFieldCursorGobEncoderEncodeBase64URLEncodingDecode,
-				cursorGobEncoderEncodeBase64URLEncodingDecode,
-			).
-			Debug(object.URIEmpty)
-
-		bytesBuffer := bytes.NewBuffer(cursorGobEncoderEncodeBase64URLEncodingDecode)
-		gobDecoder := gob.NewDecoder(bytesBuffer)
-
-		if err := gobDecoder.Decode(daoCursor); err != nil {
+		if err := gob.NewDecoder(bytes.NewBuffer(cursorBytes)).Decode(daoCursor); err != nil {
 			h.GetRuntimeLogger().
 				WithFields(fields).
 				WithField(object.URIFieldError, err).
@@ -277,11 +250,6 @@ func (h *playerHandler) ListPlayers(c echo.Context) error {
 		}
 	}
 
-	h.GetRuntimeLogger().
-		WithFields(fields).
-		WithField(object.URIFieldDAOCursor, daoCursor).
-		Debug(object.URIEmpty)
-
 	pageSize, err := strconv.Atoi(c.QueryParam("page_size"))
 	if err != nil {
 		h.GetRuntimeLogger().
@@ -290,17 +258,13 @@ func (h *playerHandler) ListPlayers(c echo.Context) error {
 			Error("Invalid page size")
 		traceSpan.RecordError(err)
 		traceSpan.SetStatus(codes.Error, "Invalid page size")
+
 		return c.JSON(http.StatusBadRequest, map[string]string{
 			"error": "Invalid page size",
 		})
 	}
 
 	daoPagination := dao.NewPagination(daoCursor, uint32(pageSize))
-
-	h.GetRuntimeLogger().
-		WithFields(fields).
-		WithField(object.URIFieldDAOPagination, daoPagination).
-		Debug(object.URIEmpty)
 
 	gameIDStr := c.Param("game_id")
 	gameID, err := h.GetUUIDer().Parse(gameIDStr)
@@ -311,12 +275,13 @@ func (h *playerHandler) ListPlayers(c echo.Context) error {
 			Error("Invalid game ID format")
 		traceSpan.RecordError(err)
 		traceSpan.SetStatus(codes.Error, "Invalid game ID format")
+
 		return c.JSON(http.StatusBadRequest, map[string]string{
 			"error": "Invalid game ID format",
 		})
 	}
 
-	daoPlyerFilter := dao.NewPlayerFilter(
+	daoPlayerFilter := dao.NewPlayerFilter(
 		[]uuid.UUID{},
 		"",
 		gameID,
@@ -327,15 +292,10 @@ func (h *playerHandler) ListPlayers(c echo.Context) error {
 		false,
 	)
 
-	h.GetRuntimeLogger().
-		WithFields(fields).
-		WithField(object.URIFieldDAOPlayerFilter, daoPlyerFilter).
-		Debug(object.URIEmpty)
-
 	players, cursor, err := h.GetServicer().List(
 		ctxWT,
 		daoPagination,
-		daoPlyerFilter,
+		daoPlayerFilter,
 	)
 	if err != nil {
 		h.GetRuntimeLogger().
@@ -356,149 +316,8 @@ func (h *playerHandler) ListPlayers(c echo.Context) error {
 	})
 }
 
-// UpdatePlayer implements PlayerHandler
-func (h *playerHandler) UpdatePlayer(c echo.Context) error {
-	ctx := c.Request().Context()
-	ctxWT, ctxWTCancelFunc := context.WithTimeout(ctx, object.NUMHTTPServerTimeout)
-	defer ctxWTCancelFunc()
-
-	var traceSpan trace.Span
-	ctxWT, traceSpan = h.GetTracer().Start(
-		ctxWT,
-		"UpdatePlayer",
-		trace.WithSpanKind(trace.SpanKindServer),
-	)
-	defer traceSpan.End()
-
-	utilRuntimeContext := util.NewRuntimeContext(ctxWT)
-	utilSpanContext := util.NewSpanContext(traceSpan)
-	fields := map[string]any{
-		"name":   "UpdatePlayer",
-		"rt_ctx": utilRuntimeContext,
-		"sp_ctx": utilSpanContext,
-		"config": h.GetConfigger(),
-	}
-
-	h.GetRuntimeLogger().
-		WithFields(fields).
-		Info(object.URIEmpty)
-
-	// Parse UUID from path parameter
-	idStr := c.Param("id")
-	id, err := h.GetUUIDer().Parse(idStr)
-	if err != nil {
-		h.GetRuntimeLogger().
-			WithFields(fields).
-			WithField(object.URIFieldError, err).
-			Error("Invalid player ID format")
-		traceSpan.RecordError(err)
-		traceSpan.SetStatus(codes.Error, "Invalid player ID format")
-
-		return c.JSON(http.StatusBadRequest, map[string]string{
-			"error": "Invalid player ID format",
-		})
-	}
-
-	// Parse request body
-	var player bo.Player
-	if err := c.Bind(&player); err != nil {
-		h.GetRuntimeLogger().
-			WithFields(fields).
-			WithField(object.URIFieldError, err).
-			Error("Failed to parse request body")
-		traceSpan.RecordError(err)
-		traceSpan.SetStatus(codes.Error, "Failed to parse request body")
-
-		return c.JSON(http.StatusBadRequest, map[string]string{
-			"error": "Invalid request format",
-		})
-	}
-
-	// Update player using service
-	if err := h.GetServicer().UpdatePlayer(ctxWT, id, player); err != nil {
-		h.GetRuntimeLogger().
-			WithFields(fields).
-			WithField(object.URIFieldError, err).
-			Error("Failed to update player")
-		traceSpan.RecordError(err)
-		traceSpan.SetStatus(codes.Error, "Failed to update player")
-
-		return c.JSON(http.StatusInternalServerError, map[string]string{
-			"error": "Failed to update player",
-		})
-	}
-
-	return c.NoContent(http.StatusOK)
-}
-
-// DeletePlayer implements PlayerHandler
-func (h *playerHandler) DeletePlayer(c echo.Context) error {
-	ctx := c.Request().Context()
-	ctxWT, ctxWTCancelFunc := context.WithTimeout(ctx, object.NUMHTTPServerTimeout)
-	defer ctxWTCancelFunc()
-
-	var traceSpan trace.Span
-	ctxWT, traceSpan = h.GetTracer().Start(
-		ctxWT,
-		"DeletePlayer",
-		trace.WithSpanKind(trace.SpanKindServer),
-	)
-	defer traceSpan.End()
-
-	utilRuntimeContext := util.NewRuntimeContext(ctxWT)
-	utilSpanContext := util.NewSpanContext(traceSpan)
-	fields := map[string]any{
-		"name":   "DeletePlayer",
-		"rt_ctx": utilRuntimeContext,
-		"sp_ctx": utilSpanContext,
-		"config": h.GetConfigger(),
-	}
-
-	h.GetRuntimeLogger().
-		WithFields(fields).
-		Info(object.URIEmpty)
-
-	// Parse UUID from path parameter
-	idStr := c.Param("id")
-	id, err := h.GetUUIDer().Parse(idStr)
-	if err != nil {
-		h.GetRuntimeLogger().
-			WithFields(fields).
-			WithField(object.URIFieldError, err).
-			Error("Invalid player ID format")
-		traceSpan.RecordError(err)
-		traceSpan.SetStatus(codes.Error, "Invalid player ID format")
-
-		return c.JSON(http.StatusBadRequest, map[string]string{
-			"error": "Invalid player ID format",
-		})
-	}
-
-	// Delete player using service
-	if err := h.GetServicer().DeletePlayer(
-		ctxWT,
-		id,
-	); err != nil {
-		h.GetRuntimeLogger().
-			WithFields(fields).
-			WithField(object.URIFieldError, err).
-			Error(object.ErrPlayerHandlerDelete.Error())
-		traceSpan.RecordError(err)
-		traceSpan.SetStatus(codes.Error, object.ErrPlayerHandlerDelete.Error())
-
-		return c.JSON(http.StatusInternalServerError, map[string]string{
-			"error": "Failed to delete player",
-		})
-	}
-
-	return c.NoContent(http.StatusOK)
-}
-
-// RegisterRoutes implements Handler.
 func (h *playerHandler) RegisterRoutes(e *echo.Echo) {
-	e.POST("/players", h.CreatePlayer)
-	e.GET("/players/:id", h.GetPlayer)
-	e.GET("/players", h.ListPlayers)
-	e.PUT("/players/:id", h.UpdatePlayer)
-	e.DELETE("/players/:id", h.DeletePlayer)
+	e.POST("/api/v1/players", h.CreatePlayer)
+	e.GET("/api/v1/players/:id", h.GetPlayer)
+	e.GET("/api/v1/games/:game_id/players", h.ListPlayers)
 }

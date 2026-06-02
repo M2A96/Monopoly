@@ -26,6 +26,8 @@ func NewHealthHandler(
 
 // RegisterRoutes implements Handler.
 func (h *healthHandler) RegisterRoutes(e *echo.Echo) {
+	e.GET("/health", h.Health)
+	e.GET("/ready", h.Ready)
 	e.GET("/healthz", h.Health)
 	e.GET("/readyz", h.Ready)
 }

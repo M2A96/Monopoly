@@ -19,6 +19,7 @@ import (
 	"go.opentelemetry.io/otel/trace"
 )
 
+
 // PlayerService implements the input.PlayerServicer interface
 
 type (
@@ -284,7 +285,7 @@ func (service *playerService) List(
 		return nil, nil, err
 	}
 
-	boPlayers := make([]bo.Player, len(daoPlayers))
+	boPlayers := make([]bo.Player, 0, len(daoPlayers))
 	for key, daoPlayer := range daoPlayers {
 		service.GetRuntimeLogger().
 			WithFields(fields).
@@ -310,130 +311,6 @@ func (service *playerService) List(
 		Debug(object.URIEmpty)
 
 	return boPlayers, cursor, nil
-}
-
-// UpdatePlayer implements input.PlayerServicer.
-func (service *playerService) UpdatePlayer(
-	ctx context.Context,
-	playerID uuid.UUID,
-	boPlayer bo.Player,
-) error {
-	var traceSpan trace.Span
-
-	ctx, traceSpan = service.GetTracer().Start(
-		ctx,
-		"UpdatePlayer",
-		trace.WithSpanKind(trace.SpanKindInternal),
-	)
-	defer traceSpan.End()
-
-	utilRuntimeContext := util.NewRuntimeContext(ctx)
-	utilSpanContext := util.NewSpanContext(traceSpan)
-	fields := map[string]any{
-		"name":      "UpdatePlayer",
-		"rt_ctx":    utilRuntimeContext,
-		"sp_ctx":    utilSpanContext,
-		"config":    service.GetConfigger(),
-		"player_id": playerID,
-		"bo_player": boPlayer,
-	}
-
-	service.GetRuntimeLogger().
-		WithFields(fields).
-		Info(object.URIEmpty)
-
-	daoPlayer := dao.NewPlayer(
-		uuid.Nil,
-		boPlayer.GetGameID(),
-		boPlayer.GetName(),
-		boPlayer.GetBalance(),
-		boPlayer.GetBalance(),
-		boPlayer.GetInJail(),
-		boPlayer.GetJailTurns(),
-		boPlayer.GetBankrupt(),
-		time.Time{},
-		time.Time{},
-		sql.NullTime{
-			Time:  time.Time{},
-			Valid: false,
-		},
-	)
-
-	service.GetRuntimeLogger().
-		WithFields(fields).
-		WithField(object.URIFieldDAOPlayer, daoPlayer).
-		Debug(object.URIEmpty)
-
-	if _, err := service.GetPlayerRepositorier().
-		Update(
-			ctx,
-			daoPlayer,
-		); err != nil {
-		service.GetRuntimeLogger().
-			WithFields(fields).
-			WithField(object.URIFieldError, err).
-			Error("Failed to update player")
-		traceSpan.RecordError(err)
-		traceSpan.SetStatus(codes.Error, "Failed to update player")
-
-		return err
-	}
-
-	service.GetRuntimeLogger().
-		WithFields(fields).
-		Debug(object.URIEmpty)
-
-	return nil
-}
-
-// DeletePlayer implements input.PlayerServicer.
-func (service *playerService) DeletePlayer(
-	ctx context.Context,
-	playerID uuid.UUID,
-) error {
-	var traceSpan trace.Span
-
-	ctx, traceSpan = service.GetTracer().Start(
-		ctx,
-		"DeletePlayer",
-		trace.WithSpanKind(trace.SpanKindInternal),
-	)
-	defer traceSpan.End()
-
-	utilRuntimeContext := util.NewRuntimeContext(ctx)
-	utilSpanContext := util.NewSpanContext(traceSpan)
-	fields := map[string]any{
-		"name":      "DeletePlayer",
-		"rt_ctx":    utilRuntimeContext,
-		"sp_ctx":    utilSpanContext,
-		"config":    service.GetConfigger(),
-		"player_id": playerID,
-	}
-
-	service.GetRuntimeLogger().
-		WithFields(fields).
-		Info(object.URIEmpty)
-
-	if _, err := service.GetPlayerRepositorier().
-		Delete(
-			ctx,
-			dao.NewCUDID(map[string]uuid.UUID{"id": playerID}),
-		); err != nil {
-		service.GetRuntimeLogger().
-			WithFields(fields).
-			WithField(object.URIFieldError, err).
-			Error("Failed to delete player")
-		traceSpan.RecordError(err)
-		traceSpan.SetStatus(codes.Error, "Failed to delete player")
-
-		return err
-	}
-
-	service.GetRuntimeLogger().
-		WithFields(fields).
-		Debug(object.URIEmpty)
-
-	return nil
 }
 
 // WithOptioners applies the given optioners to the player service
