@@ -89,4 +89,7 @@ func (r *Registry) registerDefaults() {
 	r.Register(commands.CommandPayJailFine, reducePayJailFine)
 	r.Register(commands.CommandUseGetOutOfJailCard, reduceUseGetOutOfJailCard)
 	r.Register(commands.CommandDeclareBankruptcy, reduceDeclareBankruptcy)
+	r.Register(commands.CommandAuctionPass, reduceAuctionPass)
+	r.Register(commands.CommandPayDebt, reducePayDebt)
+	r.Register(commands.CommandResign, reduceResign)
 }

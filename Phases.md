@@ -885,6 +885,101 @@ Game ends when:
 
 ---
 
+# PHASE 3 — GAP ANALYSIS (against Phase 2 engine)
+
+Branch: `feat/phase3-rule-enforcement`. Each sub-step below closes a gap found in the
+Phase 2 reducers. Every sub-step ships with reducer tests.
+
+---
+
+## STEP 3.1a — Turn Enforcement Gaps
+
+- `EndTurn` only in `END` phase (not before rolling, not with a pending action, debt or auction)
+- `PayJailFine` / `UseGetOutOfJailCard` only by the active player, before rolling
+- Bankrupt players cannot issue any command
+
+---
+
+## STEP 3.2a — Dice Rule Gaps
+
+- After the active player changes mid-turn (bankruptcy), the new player starts in `PRE_ROLL`
+
+---
+
+## STEP 3.3a — Property Rule Gaps
+
+- Landing on an unowned property always opens the purchase decision, even if the player
+  cannot afford it (declining or being unable to pay leads to auction)
+- Card "nearest railroad" charges twice the normal railroad rent
+- Card "nearest utility" charges 10x the dice total regardless of utilities owned
+- Card moves use the current dice total for utility rent (not 0)
+- Card decks cycle: the draw index wraps; a held Get Out of Jail Free card is skipped
+  until it is used and returned to its deck
+
+---
+
+## STEP 3.4a — Building Rule Gaps
+
+- Even-build rule is enforced from zero houses (Phase 2 allowed 0 → 2)
+- Hotel requires every property in the group to have 4 houses or a hotel
+- No building while any property in the color group is mortgaged
+- Even-sell rule: sell from the most-built property first
+- Selling a hotel requires 4 houses in the bank
+- Mortgage forbidden while any property in the color group has buildings
+
+---
+
+## STEP 3.5a — Jail Rule Gaps
+
+- Get Out of Jail Free card returns to the deck it came from when used
+- Forced $50 fine on the third failed roll goes through debt handling if unaffordable
+
+---
+
+## STEP 3.6a — Auction Rules
+
+Deterministic round-robin auction (no timers inside reducers):
+
+- Participants: all non-bankrupt players, starting with the player who declined
+- The current bidder must `AuctionBid` (higher than the highest bid, within funds) or `AuctionPass`
+- The highest bidder cannot pass; passing removes the player from the auction
+- When only the highest bidder remains, they pay and receive the property (`AuctionEnded`)
+- If everyone passes with no bid, the property stays with the bank
+- The turn then resumes (re-roll on doubles, otherwise `END`)
+
+---
+
+## STEP 3.7a — Bankruptcy Rules
+
+- Every payment (rent, tax, card, jail fine) goes through one `charge` helper
+- Unaffordable payment → pending `Debt {debtor, creditor, amount}` and a
+  `BANKRUPTCY_RESOLUTION` window; the debtor may sell/mortgage, then `PayDebt`
+- `DeclareBankruptcy` requires a pending debt:
+  - buildings are sold back to the bank at half price
+  - creditor player receives cash, properties (mortgages kept) and jail cards
+  - bank creditor: properties return to the bank unowned, jail cards to their decks
+- Bankrupt player's pending trades are canceled and they leave any auction
+- If the active player goes bankrupt, the turn passes to the next player
+
+---
+
+## STEP 3.8a — Win Conditions
+
+- Game ends (`GameEnded`) when one non-bankrupt player remains — via bankruptcy or resignation
+- `Resign {reason}` eliminates a player to the bank; reason `TIMEOUT` is issued by the
+  runtime (the clock lives in Phase 4 — reducers never read time)
+
+---
+
+## STEP 3.9 — Full-Game Simulation Test
+
+- Seeded bots play complete games through `replay.Replay`
+- Invariants hold after every command: no negative balances outside pending debts,
+  32 houses / 12 hotels conserved between bank and board, ownership caches consistent
+- Same seed → identical final state hash
+
+---
+
 # PHASE 3 — EXPECTED RESULT
 
 After Phase 3:

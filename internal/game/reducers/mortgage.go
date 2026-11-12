@@ -33,8 +33,8 @@ func reduceMortgageProperty(state models.GameState, cmd commands.Command) (model
 		return state, nil, fmt.Errorf("already mortgaged")
 	}
 
-	if o.Buildings > 0 {
-		return state, nil, fmt.Errorf("must sell buildings before mortgaging")
+	if o.Buildings > 0 || (space.ColorGroup != "" && maxBuildings(&state, colorGroupSpaces(space.ColorGroup)) > 0) {
+		return state, nil, fmt.Errorf("must sell all buildings in the color group before mortgaging")
 	}
 
 	state = copyState(state)

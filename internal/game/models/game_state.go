@@ -22,6 +22,7 @@ type GameState struct {
 	CardDecks  CardDecks
 	Auction    *Auction
 	Trades     []Trade
+	Debts      []Debt // unpaid charges, resolved in order
 
 	// EventSequence is the sequence number of the last event emitted for this game.
 	// It lives in state (not in the reducer registry) so replay reproduces identical numbering.

@@ -27,6 +27,9 @@ func (v *Validator) Validate(state models.GameState, cmd commands.Command) error
 	if err := validateGameState(state); err != nil {
 		return err
 	}
+	if err := validateActorNotEliminated(state, cmd); err != nil {
+		return err
+	}
 
 	switch c := cmd.(type) {
 	case *commands.CreateGameCommand:
@@ -69,6 +72,12 @@ func (v *Validator) Validate(state models.GameState, cmd commands.Command) error
 		return v.validateUseGetOutOfJailCard(state, c)
 	case *commands.DeclareBankruptcyCommand:
 		return v.validateDeclareBankruptcy(state, c)
+	case *commands.AuctionPassCommand:
+		return v.validateAuctionPass(state, c)
+	case *commands.PayDebtCommand:
+		return v.validatePayDebt(state, c)
+	case *commands.ResignCommand:
+		return v.validateResign(state, c)
 	default:
 		return fmt.Errorf("unknown command type")
 	}
@@ -79,6 +88,27 @@ func validateGameState(state models.GameState) error {
 		return &ValidationError{Field: "state", Message: "ownerships map not initialized"}
 	}
 	return nil
+}
+
+// validateActorNotEliminated rejects every in-game command from a bankrupt player.
+func validateActorNotEliminated(state models.GameState, cmd commands.Command) error {
+	switch cmd.(type) {
+	case *commands.CreateGameCommand, *commands.JoinGameCommand:
+		return nil
+	}
+	if p := findPlayer(state, cmd.GetPlayerID()); p != nil && p.IsBankrupt {
+		return &ValidationError{Field: "player", Message: "eliminated players cannot act"}
+	}
+	return nil
+}
+
+func hasDebt(state models.GameState, playerID uuid.UUID) bool {
+	for _, d := range state.Debts {
+		if d.DebtorID == playerID {
+			return true
+		}
+	}
+	return false
 }
 
 func (v *Validator) validateCreateGame(c *commands.CreateGameCommand) error {
@@ -181,6 +211,12 @@ func (v *Validator) validateEndTurn(state models.GameState, c *commands.EndTurnC
 	}
 	if player.IsBankrupt {
 		return &ValidationError{Field: "player", Message: "bankrupt"}
+	}
+	if len(state.Debts) > 0 || state.Auction != nil {
+		return &ValidationError{Field: "action", Message: "pending debts or auction must be resolved first"}
+	}
+	if state.Turn.Phase != models.TurnPhaseEnd {
+		return &ValidationError{Field: "phase", Message: "cannot end turn before finishing the roll"}
 	}
 	return nil
 }
@@ -306,7 +342,53 @@ func (v *Validator) validateAuctionBid(state models.GameState, c *commands.Aucti
 	if state.Auction == nil {
 		return &ValidationError{Field: "auction", Message: "no active auction"}
 	}
+	if state.Auction.CurrentBidderID() != c.PlayerID {
+		return &ValidationError{Field: "turn", Message: "not your turn to bid"}
+	}
+	if c.Amount <= state.Auction.HighestBid {
+		return &ValidationError{Field: "amount", Message: "bid must exceed the highest bid"}
+	}
 	return nil
+}
+
+func (v *Validator) validateAuctionPass(state models.GameState, c *commands.AuctionPassCommand) error {
+	if state.Status != models.GameStatusActive {
+		return &ValidationError{Field: "status", Message: "game not active"}
+	}
+	if state.Auction == nil {
+		return &ValidationError{Field: "auction", Message: "no active auction"}
+	}
+	if state.Auction.CurrentBidderID() != c.PlayerID {
+		return &ValidationError{Field: "turn", Message: "not your turn to bid"}
+	}
+	if state.Auction.HighestBidderID == c.PlayerID {
+		return &ValidationError{Field: "auction", Message: "highest bidder cannot pass"}
+	}
+	return nil
+}
+
+func (v *Validator) validatePayDebt(state models.GameState, c *commands.PayDebtCommand) error {
+	if state.Status != models.GameStatusActive {
+		return &ValidationError{Field: "status", Message: "game not active"}
+	}
+	if !hasDebt(state, c.PlayerID) {
+		return &ValidationError{Field: "debt", Message: "no pending debt"}
+	}
+	return nil
+}
+
+func (v *Validator) validateResign(state models.GameState, c *commands.ResignCommand) error {
+	if state.Status != models.GameStatusActive {
+		return &ValidationError{Field: "status", Message: "game not active"}
+	}
+	if findPlayer(state, c.PlayerID) == nil {
+		return &ValidationError{Field: "player", Message: "not in game"}
+	}
+	switch c.Reason {
+	case "", commands.ResignVoluntary, commands.ResignTimeout:
+		return nil
+	}
+	return &ValidationError{Field: "reason", Message: "unknown resign reason"}
 }
 
 func (v *Validator) validatePayJailFine(state models.GameState, c *commands.PayJailFineCommand) error {
@@ -319,6 +401,12 @@ func (v *Validator) validatePayJailFine(state models.GameState, c *commands.PayJ
 	}
 	if !player.IsInJail {
 		return &ValidationError{Field: "jail", Message: "not in jail"}
+	}
+	if state.Turn.ActivePlayerID != c.PlayerID {
+		return &ValidationError{Field: "turn", Message: "not your turn"}
+	}
+	if state.Turn.Phase != models.TurnPhasePreRoll {
+		return &ValidationError{Field: "phase", Message: "can only leave jail before rolling"}
 	}
 	return nil
 }
@@ -333,6 +421,12 @@ func (v *Validator) validateUseGetOutOfJailCard(state models.GameState, c *comma
 	}
 	if !player.IsInJail {
 		return &ValidationError{Field: "jail", Message: "not in jail"}
+	}
+	if state.Turn.ActivePlayerID != c.PlayerID {
+		return &ValidationError{Field: "turn", Message: "not your turn"}
+	}
+	if state.Turn.Phase != models.TurnPhasePreRoll {
+		return &ValidationError{Field: "phase", Message: "can only leave jail before rolling"}
 	}
 	if player.GetOutOfJailCards <= 0 {
 		return &ValidationError{Field: "cards", Message: "no get out of jail free cards"}
@@ -350,6 +444,9 @@ func (v *Validator) validateDeclareBankruptcy(state models.GameState, c *command
 	}
 	if player.IsBankrupt {
 		return &ValidationError{Field: "player", Message: "already bankrupt"}
+	}
+	if !hasDebt(state, c.PlayerID) {
+		return &ValidationError{Field: "debt", Message: "no pending debt: use Resign to leave the game"}
 	}
 	return nil
 }
