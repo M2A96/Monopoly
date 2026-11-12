@@ -62,6 +62,26 @@ func (e BaseEvent) GetGameID() uuid.UUID     { return e.GameID }
 func (e BaseEvent) GetSequenceNumber() int64 { return e.SequenceNumber }
 func (e BaseEvent) GetOccurredAt() time.Time { return e.OccurredAt }
 
+// Stamper allows the reducer registry to stamp base fields on events
+// without knowing the concrete type. All event types inherit this via BaseEvent embedding.
+type Stamper interface {
+	StampBase(gameID uuid.UUID, seq int64)
+}
+
+func (e *BaseEvent) StampBase(gameID uuid.UUID, seq int64) {
+	e.GameID = gameID
+	e.SequenceNumber = seq
+}
+
+func StampEvents(evts []Event, gameID uuid.UUID, counter *int64) {
+	for _, evt := range evts {
+		if s, ok := evt.(Stamper); ok {
+			*counter++
+			s.StampBase(gameID, *counter)
+		}
+	}
+}
+
 // --- Game lifecycle ---
 
 type GameCreatedEvent struct {

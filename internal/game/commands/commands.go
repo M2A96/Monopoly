@@ -5,26 +5,26 @@ import "github.com/google/uuid"
 type CommandType string
 
 const (
-	CommandCreateGame           CommandType = "CREATE_GAME"
-	CommandJoinGame             CommandType = "JOIN_GAME"
-	CommandStartGame            CommandType = "START_GAME"
-	CommandRollDice             CommandType = "ROLL_DICE"
-	CommandBuyProperty          CommandType = "BUY_PROPERTY"
-	CommandDeclinePurchase      CommandType = "DECLINE_PURCHASE"
-	CommandEndTurn              CommandType = "END_TURN"
-	CommandBuildHouse           CommandType = "BUILD_HOUSE"
-	CommandBuildHotel           CommandType = "BUILD_HOTEL"
-	CommandSellHouse            CommandType = "SELL_HOUSE"
-	CommandSellHotel            CommandType = "SELL_HOTEL"
-	CommandMortgageProperty     CommandType = "MORTGAGE_PROPERTY"
-	CommandUnmortgageProperty   CommandType = "UNMORTGAGE_PROPERTY"
-	CommandTradePropose         CommandType = "TRADE_PROPOSE"
-	CommandTradeAccept          CommandType = "TRADE_ACCEPT"
-	CommandTradeReject          CommandType = "TRADE_REJECT"
-	CommandAuctionBid           CommandType = "AUCTION_BID"
-	CommandPayJailFine          CommandType = "PAY_JAIL_FINE"
-	CommandUseGetOutOfJailCard  CommandType = "USE_GET_OUT_OF_JAIL_CARD"
-	CommandDeclareBankruptcy    CommandType = "DECLARE_BANKRUPTCY"
+	CommandCreateGame          CommandType = "CREATE_GAME"
+	CommandJoinGame            CommandType = "JOIN_GAME"
+	CommandStartGame           CommandType = "START_GAME"
+	CommandRollDice            CommandType = "ROLL_DICE"
+	CommandBuyProperty         CommandType = "BUY_PROPERTY"
+	CommandDeclinePurchase     CommandType = "DECLINE_PURCHASE"
+	CommandEndTurn             CommandType = "END_TURN"
+	CommandBuildHouse          CommandType = "BUILD_HOUSE"
+	CommandBuildHotel          CommandType = "BUILD_HOTEL"
+	CommandSellHouse           CommandType = "SELL_HOUSE"
+	CommandSellHotel           CommandType = "SELL_HOTEL"
+	CommandMortgageProperty    CommandType = "MORTGAGE_PROPERTY"
+	CommandUnmortgageProperty  CommandType = "UNMORTGAGE_PROPERTY"
+	CommandTradePropose        CommandType = "TRADE_PROPOSE"
+	CommandTradeAccept         CommandType = "TRADE_ACCEPT"
+	CommandTradeReject         CommandType = "TRADE_REJECT"
+	CommandAuctionBid          CommandType = "AUCTION_BID"
+	CommandPayJailFine         CommandType = "PAY_JAIL_FINE"
+	CommandUseGetOutOfJailCard CommandType = "USE_GET_OUT_OF_JAIL_CARD"
+	CommandDeclareBankruptcy   CommandType = "DECLARE_BANKRUPTCY"
 )
 
 // Command is the base interface for all player-issued game commands.
@@ -45,26 +45,6 @@ func (c BaseCommand) GetGameID() uuid.UUID   { return c.GameID }
 func (c BaseCommand) GetPlayerID() uuid.UUID { return c.PlayerID }
 
 // --- Game lifecycle ---
-
-type CreateGameCommand struct {
-	BaseCommand
-	Name string
-}
-
-func (c CreateGameCommand) GetType() CommandType { return CommandCreateGame }
-
-type JoinGameCommand struct {
-	BaseCommand
-	Name string
-}
-
-func (c JoinGameCommand) GetType() CommandType { return CommandJoinGame }
-
-type StartGameCommand struct {
-	BaseCommand
-}
-
-func (c StartGameCommand) GetType() CommandType { return CommandStartGame }
 
 // --- Turn actions ---
 
