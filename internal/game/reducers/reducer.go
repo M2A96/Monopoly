@@ -9,6 +9,10 @@ import (
 	"github/M2A96/Monopoly.git/internal/game/validation"
 )
 
+// RulesVersion identifies the rule set the reducers implement. Snapshots record it;
+// bump it whenever a rule change could alter the outcome of replaying old commands.
+const RulesVersion = "3"
+
 type ReducerFunc func(state models.GameState, cmd commands.Command) (models.GameState, []events.Event, error)
 
 // Reducer is the Phase 2 engine contract: a pure state transition.
