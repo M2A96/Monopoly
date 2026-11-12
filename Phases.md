@@ -727,6 +727,61 @@ Every reducer MUST have:
 
 ---
 
+# PHASE 2 — STABILIZATION STEPS
+
+Added after a review of the first Phase 2 draft. Branch: `fix/phase2-stabilization`.
+
+---
+
+## STEP 2.8 — Fix Validation Layer Build
+
+- `validation` package MUST compile (`findPlayer` takes `*GameState`, missing `uuid` import)
+- Validator MUST run inside `Registry.Dispatch` BEFORE the reducer (validation before mutation)
+
+---
+
+## STEP 2.9 — Remove Hidden Nondeterminism
+
+Reducers MUST NOT call `uuid.New()`, `time.Now()` or any RNG.
+
+- `CreateGame` uses the GameID carried by the command (or already in state)
+- `TradePropose` derives TradeID deterministically from GameID + trade count
+- Event sequence numbers live in `GameState.EventSequence`, not in a mutable registry counter
+
+---
+
+## STEP 2.10 — Fix Reducer State-Copy Bugs
+
+- Never hold a pointer into state across `copyState` (RollDice mutated the old copy)
+- Rolling doubles returns the turn to `PRE_ROLL` once the landing is resolved
+- Buying / declining after doubles returns to `PRE_ROLL`, otherwise to `END`
+
+---
+
+## STEP 2.11 — Strengthen Replay
+
+- `StateHash` MUST hash the full canonical state (SHA-256 of canonical JSON)
+- `CompareStates` MUST compare full state
+- `replay` package gets its own tests
+- Unimplemented event-based replay MUST fail loudly, not return the initial state
+
+---
+
+## STEP 2.12 — Correct Reducer Tests
+
+- Tests use valid dice (1–6) and land on deterministic spaces
+- Tests MUST NOT depend on random IDs
+- All reducer, replay and dice tests pass; `go vet` clean
+
+---
+
+## STEP 2.13 — Update Docs & Commit
+
+- README roadmap reflects actual phase status
+- Phase 2 work committed
+
+---
+
 # PHASE 2 — EXPECTED RESULT
 
 After Phase 2:

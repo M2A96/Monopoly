@@ -195,8 +195,8 @@ Every request is processed by:
 | Phase | Description | Status |
 |---|---|---|
 | 0 | Foundation stabilization (config, DI, health, logging, tests) | Done |
-| 1 | Domain modeling (GameState, Player, Turn, Board, Events, Commands) | In progress |
-| 2 | Deterministic game engine (reducers, replay, pure dice provider) | Planned |
+| 1 | Domain modeling (GameState, Player, Turn, Board, Events, Commands) | Done |
+| 2 | Deterministic game engine (reducers, replay, pure dice provider) | Done (command replay; event-based replay pending) |
 | 3 | Rule enforcement (turn order, property, jail, auction, bankruptcy) | Planned |
 | 4 | In-memory runtime engine (GameRoom, goroutine per room, snapshots) | Planned |
 | 5 | WebSocket realtime layer (transport protocol, reconnect, presence) | Planned |
