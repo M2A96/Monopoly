@@ -1110,7 +1110,7 @@ Persist:
 
 On room activation:
 1. load snapshot
-2. replay trailing events
+2. replay trailing commands (see Decision 4.0 — the command log is the source of truth)
 3. rebuild GameState
 
 ---
@@ -1121,6 +1121,60 @@ If room inactive:
 - persist final snapshot
 - terminate goroutine
 - release memory
+
+---
+
+# PHASE 4 — DECISIONS & ADDITIONS
+
+Branch: `feat/phase4-runtime`.
+
+---
+
+## DECISION 4.0 — Command Log Is The Source Of Truth
+
+Reducers are deterministic (dice, IDs and time are injected), so the ordered log of
+accepted commands fully determines a game.
+
+- Recovery = latest snapshot + replay of the commands logged after it
+- Events are still emitted and streamed to subscribers; they are a read model,
+  not the recovery source
+- Snapshots record a rules version; a snapshot from another rules version is
+  ignored and the game is rebuilt from the full command log
+
+---
+
+## STEP 4.9 — Storage Ports
+
+- `CommandLog` (append-only, strictly sequential per game) and `SnapshotStore` interfaces
+- In-memory implementations now; database implementations in Phase 6
+- Append happens BEFORE the new state is published: a command that cannot be logged is not applied
+
+---
+
+## STEP 4.10 — Runtime Dice Injection
+
+- The room rolls dice from its provider and injects them into `RollDice`; client dice are ignored
+- Production uses a crypto-random provider; tests use the seeded provider
+- Logged commands carry the dice actually used, so replay never touches the provider
+
+---
+
+## STEP 4.11 — Turn Timer
+
+- Each room tracks how long it has waited for the awaited player
+  (debtor, current auction bidder, or active player)
+- On timeout the room issues `Resign{TIMEOUT}` for that player (closes Phase 3 step 3.8)
+- The timer resets after every accepted command; timeout 0 disables it
+
+---
+
+## STEP 4.12 — Runtime Tests
+
+- Concurrent submitters: strict sequencing, contiguous command log, race detector clean
+- Subscribers receive ordered updates; a slow subscriber is dropped without blocking the room
+- Crash recovery (no final snapshot) and snapshot + trailing-command recovery reproduce the same state hash
+- Idle rooms persist a final snapshot, stop, and transparently reactivate on the next command
+- Turn timeout eliminates an absent player
 
 ---
 
@@ -1252,11 +1306,9 @@ Make gameplay durable.
 
 ## STEP 6.1 — Implement Event Store
 
-Persist:
-- sequence number
-- event type
-- payload
-- timestamp
+Persist (per Decision 4.0):
+- command log: sequence number, command type, payload (incl. injected dice), timestamp
+- event log (read model): sequence number, event type, payload, timestamp
 
 ---
 
@@ -1272,8 +1324,8 @@ Persist:
 
 Recovery:
 1. load snapshot
-2. load trailing events
-3. replay events
+2. load trailing commands
+3. replay commands
 
 ---
 
