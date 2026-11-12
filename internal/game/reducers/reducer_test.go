@@ -441,6 +441,14 @@ func TestEndTurn(t *testing.T) {
 	state, _, p1, p2 := newActiveGame(t)
 	registry := reducers.NewRegistry()
 
+	// 1+3 lands on Income Tax: nothing to decide, so the turn can end.
+	state, _, err := registry.Dispatch(state, &commands.RollDiceCommand{
+		BaseCommand: commands.BaseCommand{PlayerID: p1}, Die1: 1, Die2: 3,
+	})
+	if err != nil {
+		t.Fatalf("roll: %v", err)
+	}
+
 	newState, evts, err := registry.Dispatch(state, &commands.EndTurnCommand{
 		BaseCommand: commands.BaseCommand{PlayerID: p1},
 	})
@@ -647,13 +655,26 @@ func TestPayJailFine(t *testing.T) {
 }
 
 func TestDeclareBankruptcy(t *testing.T) {
-	state, _, p1, _ := newActiveGame(t)
+	state, _, p1, p2 := newActiveGame(t)
 	registry := reducers.NewRegistry()
 
-	player := findPlayerState(&state, p1)
-	player.Money = 0
-	player.IsBankrupt = false
-	state.Players[0] = *player
+	// p1 cannot cover Income Tax ($200): a debt to the bank is opened.
+	state.Players[0].Money = 100
+	state.Ownerships[39] = models.Ownership{SpaceIndex: 39, OwnerID: p1}
+	addSpaceIndex(&state.Players[0], 39)
+
+	state, evts, err := registry.Dispatch(state, &commands.RollDiceCommand{
+		BaseCommand: commands.BaseCommand{PlayerID: p1}, Die1: 1, Die2: 3,
+	})
+	if err != nil {
+		t.Fatalf("roll: %v", err)
+	}
+	if !findEvtByType(evts, events.EventDebtIncurred) {
+		t.Fatal("expected DebtIncurred event")
+	}
+	if w := state.Turn.ActionWindow; w == nil || w.Type != models.ActionWaitingForBankruptcyResolution || w.PlayerID != p1 {
+		t.Fatalf("expected bankruptcy resolution window for p1, got %+v", w)
+	}
 
 	newState, evts, err := registry.Dispatch(state, &commands.DeclareBankruptcyCommand{
 		BaseCommand: commands.BaseCommand{PlayerID: p1},
@@ -664,11 +685,26 @@ func TestDeclareBankruptcy(t *testing.T) {
 	if !findEvtByType(evts, events.EventBankruptcyDeclared) {
 		t.Error("expected BankruptcyDeclared event")
 	}
-	if !findEvtByType(evts, events.EventGameEnded) {
-		t.Error("expected GameEnded event (only 1 player left)")
+	ended, ok := findEvt(evts, events.EventGameEnded).(*events.GameEndedEvent)
+	if !ok || ended.WinnerID != p2 {
+		t.Fatalf("expected GameEnded with p2 as winner, got %+v", ended)
 	}
 	if newState.Status != models.GameStatusFinished {
 		t.Errorf("expected FINISHED status, got %s", newState.Status)
+	}
+	if _, owned := newState.Ownerships[39]; owned {
+		t.Error("bank creditor: property should return to the bank")
+	}
+}
+
+func TestDeclareBankruptcyWithoutDebtFails(t *testing.T) {
+	state, _, p1, _ := newActiveGame(t)
+	registry := reducers.NewRegistry()
+
+	if _, _, err := registry.Dispatch(state, &commands.DeclareBankruptcyCommand{
+		BaseCommand: commands.BaseCommand{PlayerID: p1},
+	}); err == nil {
+		t.Error("expected error declaring bankruptcy without a debt")
 	}
 }
 

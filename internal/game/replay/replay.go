@@ -17,9 +17,10 @@ import (
 type ReplayResult struct {
 	FinalState models.GameState
 	AllEvents  []events.Event
-	Turns      int
+	Commands   int // number of commands applied
 }
 
+// Replay applies recorded commands in order. It stops early once the game is finished.
 func Replay(initialState models.GameState, cmds []commands.Command) (ReplayResult, error) {
 	registry := reducers.NewRegistry()
 
@@ -29,8 +30,7 @@ func Replay(initialState models.GameState, cmds []commands.Command) (ReplayResul
 	}
 
 	var allEvents []events.Event
-	maxTurns := 1000
-	turnCount := 0
+	applied := 0
 
 	for i, cmd := range cmds {
 		newState, evts, err := registry.Dispatch(state, cmd)
@@ -40,21 +40,17 @@ func Replay(initialState models.GameState, cmds []commands.Command) (ReplayResul
 
 		state = newState
 		allEvents = append(allEvents, evts...)
-		turnCount++
+		applied++
 
 		if state.Status == models.GameStatusFinished {
 			break
-		}
-
-		if turnCount > maxTurns {
-			return ReplayResult{}, fmt.Errorf("replay exceeded %d turns", maxTurns)
 		}
 	}
 
 	return ReplayResult{
 		FinalState: state,
 		AllEvents:  allEvents,
-		Turns:      turnCount,
+		Commands:   applied,
 	}, nil
 }
 

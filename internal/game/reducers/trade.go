@@ -233,44 +233,25 @@ func reduceTradeReject(state models.GameState, cmd commands.Command) (models.Gam
 	}, nil
 }
 
-func reduceAuctionBid(state models.GameState, cmd commands.Command) (models.GameState, []events.Event, error) {
-	c, ok := cmd.(*commands.AuctionBidCommand)
-	if !ok {
-		return state, nil, fmt.Errorf("expected AuctionBidCommand, got %T", cmd)
-	}
-
+// validateJailAction: jail exits by fine or card happen on the player's own turn, before rolling.
+func validateJailAction(state models.GameState, playerID uuid.UUID) (*models.PlayerState, error) {
 	if state.Status != models.GameStatusActive {
-		return state, nil, fmt.Errorf("game not active")
+		return nil, fmt.Errorf("game not active")
 	}
-
-	if state.Auction == nil {
-		return state, nil, fmt.Errorf("no active auction")
+	player := findPlayer(&state, playerID)
+	if player == nil {
+		return nil, fmt.Errorf("player not in game")
 	}
-
-	player := findPlayer(&state, c.PlayerID)
-	if player == nil || player.IsBankrupt {
-		return state, nil, fmt.Errorf("player not valid")
+	if !player.IsInJail {
+		return nil, fmt.Errorf("player is not in jail")
 	}
-
-	if c.Amount <= state.Auction.HighestBid {
-		return state, nil, fmt.Errorf("bid must be higher than current highest bid (%d)", state.Auction.HighestBid)
+	if state.Turn.ActivePlayerID != playerID {
+		return nil, fmt.Errorf("not your turn")
 	}
-
-	if player.Money < c.Amount {
-		return state, nil, fmt.Errorf("insufficient funds")
+	if state.Turn.Phase != models.TurnPhasePreRoll {
+		return nil, fmt.Errorf("can only leave jail before rolling")
 	}
-
-	state = copyState(state)
-	state.Auction.Bids[c.PlayerID] = c.Amount
-	state.Auction.HighestBid = c.Amount
-
-	return state, []events.Event{
-		&events.AuctionBidPlacedEvent{
-			BaseEvent: events.BaseEvent{Type: events.EventAuctionBidPlaced},
-			PlayerID:  c.PlayerID,
-			Amount:    c.Amount,
-		},
-	}, nil
+	return player, nil
 }
 
 func reducePayJailFine(state models.GameState, cmd commands.Command) (models.GameState, []events.Event, error) {
@@ -279,36 +260,20 @@ func reducePayJailFine(state models.GameState, cmd commands.Command) (models.Gam
 		return state, nil, fmt.Errorf("expected PayJailFineCommand, got %T", cmd)
 	}
 
-	if state.Status != models.GameStatusActive {
-		return state, nil, fmt.Errorf("game not active")
+	player, err := validateJailAction(state, c.PlayerID)
+	if err != nil {
+		return state, nil, err
 	}
-
-	player := findPlayer(&state, c.PlayerID)
-	if player == nil {
-		return state, nil, fmt.Errorf("player not in game")
-	}
-
-	if !player.IsInJail {
-		return state, nil, fmt.Errorf("player is not in jail")
-	}
-
-	if player.Money < 50 {
+	if player.Money < jailFine {
 		return state, nil, fmt.Errorf("insufficient funds for jail fine")
 	}
 
 	state = copyState(state)
 	player = findPlayer(&state, c.PlayerID)
-	player.Money -= 50
-	player.IsInJail = false
-	player.JailState = models.JailState{}
+	player.Money -= jailFine
+	release(player)
 
-	return state, []events.Event{
-		&events.ReleasedFromJailEvent{
-			BaseEvent: events.BaseEvent{Type: events.EventReleasedFromJail},
-			PlayerID:  c.PlayerID,
-			Method:    "PAYMENT",
-		},
-	}, nil
+	return state, []events.Event{releasedEvent(c.PlayerID, "PAYMENT")}, nil
 }
 
 func reduceUseGetOutOfJailCard(state models.GameState, cmd commands.Command) (models.GameState, []events.Event, error) {
@@ -317,19 +282,10 @@ func reduceUseGetOutOfJailCard(state models.GameState, cmd commands.Command) (mo
 		return state, nil, fmt.Errorf("expected UseGetOutOfJailCardCommand, got %T", cmd)
 	}
 
-	if state.Status != models.GameStatusActive {
-		return state, nil, fmt.Errorf("game not active")
+	player, err := validateJailAction(state, c.PlayerID)
+	if err != nil {
+		return state, nil, err
 	}
-
-	player := findPlayer(&state, c.PlayerID)
-	if player == nil {
-		return state, nil, fmt.Errorf("player not in game")
-	}
-
-	if !player.IsInJail {
-		return state, nil, fmt.Errorf("player is not in jail")
-	}
-
 	if player.GetOutOfJailCards <= 0 {
 		return state, nil, fmt.Errorf("no Get Out of Jail Free cards")
 	}
@@ -337,14 +293,11 @@ func reduceUseGetOutOfJailCard(state models.GameState, cmd commands.Command) (mo
 	state = copyState(state)
 	player = findPlayer(&state, c.PlayerID)
 	player.GetOutOfJailCards--
-	player.IsInJail = false
-	player.JailState = models.JailState{}
+	// Return the card to its deck so it can be drawn again.
+	if held := heldJailCards(&state, c.PlayerID); len(held) > 0 {
+		delete(state.CardDecks.JailCardHolders, held[0])
+	}
+	release(player)
 
-	return state, []events.Event{
-		&events.ReleasedFromJailEvent{
-			BaseEvent: events.BaseEvent{Type: events.EventReleasedFromJail},
-			PlayerID:  c.PlayerID,
-			Method:    "CARD",
-		},
-	}, nil
+	return state, []events.Event{releasedEvent(c.PlayerID, "CARD")}, nil
 }

@@ -138,13 +138,28 @@ func copyState(state models.GameState) models.GameState {
 	}
 	cp.Trades = make([]models.Trade, len(state.Trades))
 	copy(cp.Trades, state.Trades)
+	if state.Debts != nil {
+		cp.Debts = make([]models.Debt, len(state.Debts))
+		copy(cp.Debts, state.Debts)
+	}
 	if state.Auction != nil {
 		a := *state.Auction
 		a.Bids = make(map[uuid.UUID]int, len(state.Auction.Bids))
 		for k, v := range state.Auction.Bids {
 			a.Bids[k] = v
 		}
+		a.Participants = append([]uuid.UUID(nil), state.Auction.Participants...)
 		cp.Auction = &a
+	}
+	if state.Turn.ActionWindow != nil {
+		w := *state.Turn.ActionWindow
+		cp.Turn.ActionWindow = &w
+	}
+	if state.CardDecks.JailCardHolders != nil {
+		cp.CardDecks.JailCardHolders = make(map[string]uuid.UUID, len(state.CardDecks.JailCardHolders))
+		for k, v := range state.CardDecks.JailCardHolders {
+			cp.CardDecks.JailCardHolders[k] = v
+		}
 	}
 	cp.CardDecks.Chance = make([]models.Card, len(state.CardDecks.Chance))
 	copy(cp.CardDecks.Chance, state.CardDecks.Chance)
@@ -227,4 +242,23 @@ func allSameBuildings(state *models.GameState, group []int) int {
 		}
 	}
 	return min
+}
+
+func maxBuildings(state *models.GameState, group []int) int {
+	max := 0
+	for _, idx := range group {
+		if o, ok := state.Ownerships[idx]; ok && o.Buildings > max {
+			max = o.Buildings
+		}
+	}
+	return max
+}
+
+func groupHasMortgage(state *models.GameState, group []int) bool {
+	for _, idx := range group {
+		if o, ok := state.Ownerships[idx]; ok && o.Mortgaged {
+			return true
+		}
+	}
+	return false
 }

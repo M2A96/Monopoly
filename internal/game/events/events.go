@@ -39,6 +39,10 @@ const (
 	EventChanceCardDrawn         EventType = "CHANCE_CARD_DRAWN"
 	EventCommunityChestCardDrawn EventType = "COMMUNITY_CHEST_CARD_DRAWN"
 	EventTaxPaid                 EventType = "TAX_PAID"
+	EventAuctionPassed           EventType = "AUCTION_PASSED"
+	EventDebtIncurred            EventType = "DEBT_INCURRED"
+	EventDebtPaid                EventType = "DEBT_PAID"
+	EventPlayerResigned          EventType = "PLAYER_RESIGNED"
 )
 
 // Event is the base interface for all domain events.
@@ -293,4 +297,33 @@ type TaxPaidEvent struct {
 	PlayerID   uuid.UUID
 	SpaceIndex int
 	Amount     int
+}
+
+// --- Phase 3: auctions, debts, resignation ---
+
+type AuctionPassedEvent struct {
+	BaseEvent
+	PlayerID uuid.UUID
+}
+
+// DebtIncurredEvent: a charge the debtor could not cover. CreditorID uuid.Nil = bank.
+type DebtIncurredEvent struct {
+	BaseEvent
+	DebtorID   uuid.UUID
+	CreditorID uuid.UUID
+	Amount     int
+	Reason     string
+}
+
+type DebtPaidEvent struct {
+	BaseEvent
+	DebtorID   uuid.UUID
+	CreditorID uuid.UUID
+	Amount     int
+}
+
+type PlayerResignedEvent struct {
+	BaseEvent
+	PlayerID uuid.UUID
+	Reason   string
 }

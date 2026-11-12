@@ -1,5 +1,7 @@
 package models
 
+import "github.com/google/uuid"
+
 type CardType string
 type CardEffectType string
 
@@ -43,6 +45,10 @@ type CardDecks struct {
 	CommunityChest []Card
 	ChanceIndex    int
 	CommunityIndex int
+
+	// JailCardHolders maps a held Get Out of Jail Free card ID to its holder.
+	// Held cards are skipped when drawing and return to their deck when used.
+	JailCardHolders map[string]uuid.UUID
 }
 
 // DefaultChanceDeck returns the standard 16-card Chance deck in canonical order.

@@ -3,7 +3,6 @@ package reducers
 import (
 	"fmt"
 
-	"github.com/google/uuid"
 	"github/M2A96/Monopoly.git/internal/game/commands"
 	"github/M2A96/Monopoly.git/internal/game/events"
 	"github/M2A96/Monopoly.git/internal/game/models"
@@ -64,7 +63,7 @@ func reduceBuyProperty(state models.GameState, cmd commands.Command) (models.Gam
 	addSpaceIndex(player, spaceIndex)
 
 	state.Turn.ActionWindow = nil
-	state.Turn.Phase = phaseAfterResolution(&state)
+	settlePhase(&state)
 
 	return state, []events.Event{
 		&events.PropertyPurchasedEvent{
@@ -101,23 +100,7 @@ func reduceDeclinePurchase(state models.GameState, cmd commands.Command) (models
 	spaceIndex := state.Turn.ActionWindow.SpaceIndex
 
 	state = copyState(state)
-	state.Auction = &models.Auction{
-		SpaceIndex: spaceIndex,
-		Bids:       make(map[uuid.UUID]int),
-	}
-	state.Auction.Bids[c.PlayerID] = 0
-	state.Turn.ActionWindow = &models.ActionWindow{
-		Type:       models.ActionWaitingForAuctionBid,
-		PlayerID:   c.PlayerID,
-		SpaceIndex: spaceIndex,
-	}
-
-	return state, []events.Event{
-		&events.AuctionStartedEvent{
-			BaseEvent:  events.BaseEvent{Type: events.EventAuctionStarted},
-			SpaceIndex: spaceIndex,
-		},
-	}, nil
+	return state, startAuction(&state, spaceIndex, c.PlayerID), nil
 }
 
 func reduceBuildHouse(state models.GameState, cmd commands.Command) (models.GameState, []events.Event, error) {
@@ -153,8 +136,10 @@ func reduceBuildHouse(state models.GameState, cmd commands.Command) (models.Game
 	}
 
 	group := colorGroupSpaces(space.ColorGroup)
-	minBuildings := allSameBuildings(&state, group)
-	if minBuildings > 0 && o.Buildings > minBuildings {
+	if groupHasMortgage(&state, group) {
+		return state, nil, fmt.Errorf("cannot build while a property in the group is mortgaged")
+	}
+	if o.Buildings > allSameBuildings(&state, group) {
 		return state, nil, fmt.Errorf("even building rule: must build equally across group")
 	}
 
@@ -222,6 +207,14 @@ func reduceBuildHotel(state models.GameState, cmd commands.Command) (models.Game
 		return state, nil, fmt.Errorf("need 4 houses before building hotel")
 	}
 
+	group := colorGroupSpaces(space.ColorGroup)
+	if groupHasMortgage(&state, group) {
+		return state, nil, fmt.Errorf("cannot build while a property in the group is mortgaged")
+	}
+	if allSameBuildings(&state, group) < 4 {
+		return state, nil, fmt.Errorf("even building rule: every property in the group needs 4 houses first")
+	}
+
 	if state.Bank.Hotels <= 0 {
 		return state, nil, fmt.Errorf("no hotels available in bank")
 	}
@@ -279,6 +272,10 @@ func reduceSellHouse(state models.GameState, cmd commands.Command) (models.GameS
 		return state, nil, fmt.Errorf("no houses to sell")
 	}
 
+	if o.Buildings < maxBuildings(&state, colorGroupSpaces(space.ColorGroup)) {
+		return state, nil, fmt.Errorf("even selling rule: sell from the most-built property first")
+	}
+
 	state = copyState(state)
 	player := findPlayer(&state, c.PlayerID)
 	o = state.Ownerships[c.SpaceIndex]
@@ -321,6 +318,10 @@ func reduceSellHotel(state models.GameState, cmd commands.Command) (models.GameS
 
 	if o.Buildings != models.HotelLevel {
 		return state, nil, fmt.Errorf("no hotel to sell")
+	}
+
+	if state.Bank.Houses < 4 {
+		return state, nil, fmt.Errorf("bank needs 4 houses to break down a hotel (has %d)", state.Bank.Houses)
 	}
 
 	state = copyState(state)

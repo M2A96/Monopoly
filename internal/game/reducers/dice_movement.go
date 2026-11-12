@@ -10,6 +10,21 @@ import (
 	"github/M2A96/Monopoly.git/pkg/board"
 )
 
+const (
+	jailPosition = 10
+	goSalary     = 200
+	jailFine     = 50
+	boardSize    = 40
+)
+
+// rentModifier adjusts rent for card-driven moves.
+type rentModifier struct {
+	railroadMultiplier int // "nearest railroad" cards: pay twice the rent
+	utilityFactor      int // "nearest utility" card: pay 10x dice regardless of utilities owned
+}
+
+var noModifier = rentModifier{}
+
 func reduceRollDice(state models.GameState, cmd commands.Command) (models.GameState, []events.Event, error) {
 	c, ok := cmd.(*commands.RollDiceCommand)
 	if !ok {
@@ -25,8 +40,7 @@ func reduceRollDice(state models.GameState, cmd commands.Command) (models.GameSt
 		return state, nil, fmt.Errorf("player not in game")
 	}
 
-	player := &state.Players[playerIdx]
-	if player.IsBankrupt {
+	if state.Players[playerIdx].IsBankrupt {
 		return state, nil, fmt.Errorf("bankrupt player cannot act")
 	}
 
@@ -43,8 +57,7 @@ func reduceRollDice(state models.GameState, cmd commands.Command) (models.GameSt
 	}
 
 	state = copyState(state)
-	// Re-acquire the pointer: the one taken above points into the pre-copy slice.
-	player = &state.Players[playerIdx]
+	player := &state.Players[playerIdx]
 	diceRoll := models.NewDiceRoll(c.Die1, c.Die2)
 	state.Turn.DiceRoll = diceRoll
 	state.Turn.Phase = models.TurnPhaseLand
@@ -59,385 +72,265 @@ func reduceRollDice(state models.GameState, cmd commands.Command) (models.GameSt
 	}
 
 	if player.IsInJail {
-		return reduceJailRoll(&state, player, c, evts)
+		evts = append(evts, rollInJail(&state, player, diceRoll)...)
+	} else {
+		if diceRoll.IsDoubles() {
+			state.Turn.DoublesCount++
+		}
+		if state.Turn.DoublesCount >= 3 {
+			evts = append(evts, sendToJail(&state, player)...)
+		} else {
+			evts = append(evts, moveBy(&state, player, diceRoll.Total())...)
+		}
 	}
 
-	isDoubles := diceRoll.IsDoubles()
-	if isDoubles {
-		state.Turn.DoublesCount++
-	}
-
-	if state.Turn.DoublesCount >= 3 {
-		return reduceTripleDoubles(&state, player, c.PlayerID, evts)
-	}
-
-	oldPos := player.Position
-	total := diceRoll.Total()
-	newPos := (oldPos + total) % 40
-	player.Position = newPos
-
-	if newPos < oldPos && oldPos != 30 {
-		player.Money += 200
-		evts = append(evts, &events.PassedGoEvent{
-			BaseEvent: events.BaseEvent{Type: events.EventPassedGo},
-			PlayerID:  c.PlayerID,
-			Amount:    200,
-		})
-	}
-
-	evts = append(evts, &events.PlayerMovedEvent{
-		BaseEvent:    events.BaseEvent{Type: events.EventPlayerMoved},
-		PlayerID:     c.PlayerID,
-		FromPosition: oldPos,
-		ToPosition:   newPos,
-	})
-
-	landEvts := handleLanding(&state, c.PlayerID, newPos, diceRoll.Total())
-	evts = append(evts, landEvts...)
-
-	if state.Turn.Phase == models.TurnPhaseLand {
-		state.Turn.Phase = phaseAfterResolution(&state)
-	}
-
+	settlePhase(&state)
 	return state, evts, nil
 }
 
-func reduceJailRoll(state *models.GameState, player *models.PlayerState, c *commands.RollDiceCommand, evts []events.Event) (models.GameState, []events.Event, error) {
-	diceRoll := models.NewDiceRoll(c.Die1, c.Die2)
-
-	if diceRoll.IsDoubles() {
-		player.IsInJail = false
-		player.JailState = models.JailState{}
-		// Leaving jail on doubles does not grant an extra roll.
+// rollInJail handles a roll by a jailed player: doubles release them (no extra roll);
+// the third failed attempt forces the $50 fine and the player moves anyway.
+func rollInJail(state *models.GameState, player *models.PlayerState, roll models.DiceRoll) []events.Event {
+	if roll.IsDoubles() {
+		release(player)
 		state.Turn.DoublesCount = 0
-
-		evts = append(evts, &events.ReleasedFromJailEvent{
-			BaseEvent: events.BaseEvent{Type: events.EventReleasedFromJail},
-			PlayerID:  c.PlayerID,
-			Method:    "DOUBLES",
-		})
-
-		oldPos := player.Position
-		total := diceRoll.Total()
-		newPos := (oldPos + total) % 40
-		player.Position = newPos
-
-		if newPos < oldPos {
-			player.Money += 200
-			evts = append(evts, &events.PassedGoEvent{
-				BaseEvent: events.BaseEvent{Type: events.EventPassedGo},
-				PlayerID:  c.PlayerID,
-				Amount:    200,
-			})
-		}
-
-		evts = append(evts, &events.PlayerMovedEvent{
-			BaseEvent:    events.BaseEvent{Type: events.EventPlayerMoved},
-			PlayerID:     c.PlayerID,
-			FromPosition: oldPos,
-			ToPosition:   newPos,
-		})
-
-		landEvts := handleLanding(state, c.PlayerID, newPos, diceRoll.Total())
-		evts = append(evts, landEvts...)
-
-		if state.Turn.Phase == models.TurnPhaseLand {
-			state.Turn.Phase = models.TurnPhaseEnd
-		}
-
-		return *state, evts, nil
+		evts := []events.Event{releasedEvent(player.PlayerID, "DOUBLES")}
+		return append(evts, moveBy(state, player, roll.Total())...)
 	}
 
 	player.JailState.TurnsInJail++
-	state.Turn.Phase = models.TurnPhaseEnd
-
-	if player.JailState.TurnsInJail >= 3 {
-		player.Money -= 50
-		player.IsInJail = false
-		player.JailState = models.JailState{}
-
-		total := diceRoll.Total()
-		oldPos := player.Position
-		newPos := (oldPos + total) % 40
-		player.Position = newPos
-
-		evts = append(evts, &events.ReleasedFromJailEvent{
-			BaseEvent: events.BaseEvent{Type: events.EventReleasedFromJail},
-			PlayerID:  c.PlayerID,
-			Method:    "FORCE_PAY",
-		})
-
-		if newPos < oldPos {
-			player.Money += 200
-			evts = append(evts, &events.PassedGoEvent{
-				BaseEvent: events.BaseEvent{Type: events.EventPassedGo},
-				PlayerID:  c.PlayerID,
-				Amount:    200,
-			})
-		}
-
-		evts = append(evts, &events.PlayerMovedEvent{
-			BaseEvent:    events.BaseEvent{Type: events.EventPlayerMoved},
-			PlayerID:     c.PlayerID,
-			FromPosition: oldPos,
-			ToPosition:   newPos,
-		})
-
-		landEvts := handleLanding(state, c.PlayerID, newPos, diceRoll.Total())
-		evts = append(evts, landEvts...)
+	if player.JailState.TurnsInJail < 3 {
+		state.Turn.Phase = models.TurnPhaseEnd
+		return nil
 	}
 
-	return *state, evts, nil
+	release(player)
+	evts := []events.Event{releasedEvent(player.PlayerID, "FORCE_PAY")}
+	evts = append(evts, charge(state, player.PlayerID, bank, jailFine, "JAIL_FINE")...)
+	return append(evts, moveBy(state, player, roll.Total())...)
 }
 
-func reduceTripleDoubles(state *models.GameState, player *models.PlayerState, playerID uuid.UUID, evts []events.Event) (models.GameState, []events.Event, error) {
+func release(player *models.PlayerState) {
+	player.IsInJail = false
+	player.JailState = models.JailState{}
+}
+
+func releasedEvent(playerID uuid.UUID, method string) events.Event {
+	return &events.ReleasedFromJailEvent{
+		BaseEvent: events.BaseEvent{Type: events.EventReleasedFromJail},
+		PlayerID:  playerID,
+		Method:    method,
+	}
+}
+
+func sendToJail(state *models.GameState, player *models.PlayerState) []events.Event {
 	player.IsInJail = true
-	player.JailState = models.JailState{TurnsInJail: 0}
-	player.Position = 10
+	player.JailState = models.JailState{}
+	player.Position = jailPosition
 	state.Turn.DoublesCount = 0
 	state.Turn.Phase = models.TurnPhaseEnd
 	state.Turn.ActionWindow = nil
-
-	evts = append(evts, &events.SentToJailEvent{
+	return []events.Event{&events.SentToJailEvent{
 		BaseEvent: events.BaseEvent{Type: events.EventSentToJail},
-		PlayerID:  playerID,
-	})
-
-	return *state, evts, nil
+		PlayerID:  player.PlayerID,
+	}}
 }
 
-func handleLanding(state *models.GameState, playerID uuid.UUID, spaceIndex int, diceTotal int) []events.Event {
+// moveBy advances the player by steps, collecting GO salary when wrapping, then lands.
+func moveBy(state *models.GameState, player *models.PlayerState, steps int) []events.Event {
+	oldPos := player.Position
+	newPos := (oldPos + steps) % boardSize
+	return moveTo(state, player, newPos, newPos < oldPos, noModifier)
+}
+
+// moveTo places the player on newPos (forward movement), optionally paying GO salary.
+func moveTo(state *models.GameState, player *models.PlayerState, newPos int, passedGo bool, mod rentModifier) []events.Event {
 	var evts []events.Event
+	oldPos := player.Position
+	if passedGo {
+		player.Money += goSalary
+		evts = append(evts, &events.PassedGoEvent{
+			BaseEvent: events.BaseEvent{Type: events.EventPassedGo},
+			PlayerID:  player.PlayerID,
+			Amount:    goSalary,
+		})
+	}
+	player.Position = newPos
+	evts = append(evts, &events.PlayerMovedEvent{
+		BaseEvent:    events.BaseEvent{Type: events.EventPlayerMoved},
+		PlayerID:     player.PlayerID,
+		FromPosition: oldPos,
+		ToPosition:   newPos,
+	})
+	return append(evts, land(state, player, newPos, mod)...)
+}
+
+func diceTotal(state *models.GameState) int {
+	if state.Turn.DiceRoll == nil {
+		return 0
+	}
+	return state.Turn.DiceRoll.Total()
+}
+
+func land(state *models.GameState, player *models.PlayerState, spaceIndex int, mod rentModifier) []events.Event {
 	space, ok := board.SpaceByIndex[spaceIndex]
 	if !ok {
-		return evts
-	}
-
-	player := findPlayer(state, playerID)
-	if player == nil {
-		return evts
+		return nil
 	}
 
 	switch space.Type {
 	case board.SpaceTypeGoToJail:
-		player.IsInJail = true
-		player.JailState = models.JailState{TurnsInJail: 0}
-		player.Position = 10
-		state.Turn.Phase = models.TurnPhaseEnd
-		state.Turn.ActionWindow = nil
-		evts = append(evts, &events.SentToJailEvent{
-			BaseEvent: events.BaseEvent{Type: events.EventSentToJail},
-			PlayerID:  playerID,
-		})
+		return sendToJail(state, player)
 
 	case board.SpaceTypeTax:
-		amount := space.TaxAmount
-		player.Money -= amount
-		evts = append(evts, &events.TaxPaidEvent{
+		evts := []events.Event{&events.TaxPaidEvent{
 			BaseEvent:  events.BaseEvent{Type: events.EventTaxPaid},
-			PlayerID:   playerID,
+			PlayerID:   player.PlayerID,
 			SpaceIndex: spaceIndex,
-			Amount:     amount,
-		})
+			Amount:     space.TaxAmount,
+		}}
+		return append(evts, charge(state, player.PlayerID, bank, space.TaxAmount, "TAX")...)
 
 	case board.SpaceTypeProperty, board.SpaceTypeRailroad, board.SpaceTypeUtility:
 		o, owned := state.Ownerships[spaceIndex]
 		if !owned {
-			if player.Money >= space.Price {
-				state.Turn.Phase = models.TurnPhaseAction
-				state.Turn.ActionWindow = &models.ActionWindow{
-					Type:       models.ActionWaitingForPurchaseDecision,
-					PlayerID:   playerID,
-					SpaceIndex: spaceIndex,
-				}
-			}
-		} else if o.OwnerID != playerID && !o.Mortgaged {
-			rent := calculateRent(spaceIndex, diceTotal, state, o.OwnerID)
-			player.Money -= rent
-			owner := findPlayer(state, o.OwnerID)
-			if owner != nil {
-				owner.Money += rent
-			}
-			evts = append(evts, &events.RentChargedEvent{
-				BaseEvent:  events.BaseEvent{Type: events.EventRentCharged},
-				PayerID:    playerID,
-				OwnerID:    o.OwnerID,
+			// Always offered; a player who cannot afford it declines and it goes to auction.
+			state.Turn.Phase = models.TurnPhaseAction
+			state.Turn.ActionWindow = &models.ActionWindow{
+				Type:       models.ActionWaitingForPurchaseDecision,
+				PlayerID:   player.PlayerID,
 				SpaceIndex: spaceIndex,
-				Amount:     rent,
-			})
+			}
+			return nil
 		}
+		if o.OwnerID == player.PlayerID || o.Mortgaged {
+			return nil
+		}
+		rent := calculateRent(spaceIndex, diceTotal(state), state, o.OwnerID)
+		switch {
+		case space.Type == board.SpaceTypeRailroad && mod.railroadMultiplier > 1:
+			rent *= mod.railroadMultiplier
+		case space.Type == board.SpaceTypeUtility && mod.utilityFactor > 0:
+			rent = diceTotal(state) * mod.utilityFactor
+		}
+		evts := []events.Event{&events.RentChargedEvent{
+			BaseEvent:  events.BaseEvent{Type: events.EventRentCharged},
+			PayerID:    player.PlayerID,
+			OwnerID:    o.OwnerID,
+			SpaceIndex: spaceIndex,
+			Amount:     rent,
+		}}
+		return append(evts, charge(state, player.PlayerID, o.OwnerID, rent, "RENT")...)
 
 	case board.SpaceTypeChance:
-		if state.CardDecks.ChanceIndex < len(state.CardDecks.Chance) {
-			card := state.CardDecks.Chance[state.CardDecks.ChanceIndex]
-			state.CardDecks.ChanceIndex++
-			evts = append(evts, &events.ChanceCardDrawnEvent{
-				BaseEvent: events.BaseEvent{Type: events.EventChanceCardDrawn},
-				PlayerID:  playerID,
-				CardID:    card.ID,
-			})
-			cardEvts := applyCard(state, playerID, card)
-			evts = append(evts, cardEvts...)
+		card, ok := drawCard(state.CardDecks.Chance, &state.CardDecks.ChanceIndex, state.CardDecks.JailCardHolders)
+		if !ok {
+			return nil
 		}
+		evts := []events.Event{&events.ChanceCardDrawnEvent{
+			BaseEvent: events.BaseEvent{Type: events.EventChanceCardDrawn},
+			PlayerID:  player.PlayerID,
+			CardID:    card.ID,
+		}}
+		return append(evts, applyCard(state, player, card)...)
 
 	case board.SpaceTypeCommunity:
-		if state.CardDecks.CommunityIndex < len(state.CardDecks.CommunityChest) {
-			card := state.CardDecks.CommunityChest[state.CardDecks.CommunityIndex]
-			state.CardDecks.CommunityIndex++
-			evts = append(evts, &events.CommunityChestCardDrawnEvent{
-				BaseEvent: events.BaseEvent{Type: events.EventCommunityChestCardDrawn},
-				PlayerID:  playerID,
-				CardID:    card.ID,
-			})
-			cardEvts := applyCard(state, playerID, card)
-			evts = append(evts, cardEvts...)
+		card, ok := drawCard(state.CardDecks.CommunityChest, &state.CardDecks.CommunityIndex, state.CardDecks.JailCardHolders)
+		if !ok {
+			return nil
 		}
+		evts := []events.Event{&events.CommunityChestCardDrawnEvent{
+			BaseEvent: events.BaseEvent{Type: events.EventCommunityChestCardDrawn},
+			PlayerID:  player.PlayerID,
+			CardID:    card.ID,
+		}}
+		return append(evts, applyCard(state, player, card)...)
 	}
 
-	return evts
+	return nil
 }
 
-func applyCard(state *models.GameState, playerID uuid.UUID, card models.Card) []events.Event {
-	var evts []events.Event
-	player := findPlayer(state, playerID)
-	if player == nil {
-		return evts
-	}
+func applyCard(state *models.GameState, player *models.PlayerState, card models.Card) []events.Event {
+	pid := player.PlayerID
+	reason := "CARD_" + card.ID
 
 	switch card.Effect {
 	case models.CardEffectMoveToGo:
-		player.Position = 0
-		player.Money += 200
-		evts = append(evts, &events.PassedGoEvent{
-			BaseEvent: events.BaseEvent{Type: events.EventPassedGo},
-			PlayerID:  playerID,
-			Amount:    200,
-		})
-		landEvts := handleLanding(state, playerID, 0, 0)
-		evts = append(evts, landEvts...)
+		return moveTo(state, player, 0, true, noModifier)
 
 	case models.CardEffectMoveToSpace:
-		oldPos := player.Position
-		newPos := card.SpaceIndex
-		if newPos < oldPos {
-			player.Money += 200
-			evts = append(evts, &events.PassedGoEvent{
-				BaseEvent: events.BaseEvent{Type: events.EventPassedGo},
-				PlayerID:  playerID,
-				Amount:    200,
-			})
-		}
-		player.Position = newPos
-		evts = append(evts, &events.PlayerMovedEvent{
-			BaseEvent:    events.BaseEvent{Type: events.EventPlayerMoved},
-			PlayerID:     playerID,
-			FromPosition: oldPos,
-			ToPosition:   newPos,
-		})
-		landEvts := handleLanding(state, playerID, newPos, 0)
-		evts = append(evts, landEvts...)
+		return moveTo(state, player, card.SpaceIndex, card.SpaceIndex < player.Position, noModifier)
 
 	case models.CardEffectGoToJail:
-		player.IsInJail = true
-		player.JailState = models.JailState{TurnsInJail: 0}
-		player.Position = 10
-		state.Turn.Phase = models.TurnPhaseEnd
-		state.Turn.ActionWindow = nil
-		evts = append(evts, &events.SentToJailEvent{
-			BaseEvent: events.BaseEvent{Type: events.EventSentToJail},
-			PlayerID:  playerID,
-		})
+		return sendToJail(state, player)
 
 	case models.CardEffectCollect:
 		player.Money += card.Amount
 
 	case models.CardEffectPay:
-		player.Money -= card.Amount
+		return charge(state, pid, bank, card.Amount, reason)
 
 	case models.CardEffectGetOutOfJail:
+		if state.CardDecks.JailCardHolders == nil {
+			state.CardDecks.JailCardHolders = make(map[string]uuid.UUID)
+		}
+		state.CardDecks.JailCardHolders[card.ID] = pid
 		player.GetOutOfJailCards++
 
 	case models.CardEffectGoBack3Spaces:
-		newPos := player.Position - 3
-		if newPos < 0 {
-			newPos += 40
-		}
+		newPos := (player.Position - 3 + boardSize) % boardSize
 		oldPos := player.Position
 		player.Position = newPos
-		evts = append(evts, &events.PlayerMovedEvent{
+		evts := []events.Event{&events.PlayerMovedEvent{
 			BaseEvent:    events.BaseEvent{Type: events.EventPlayerMoved},
-			PlayerID:     playerID,
+			PlayerID:     pid,
 			FromPosition: oldPos,
 			ToPosition:   newPos,
-		})
-		landEvts := handleLanding(state, playerID, newPos, 0)
-		evts = append(evts, landEvts...)
+		}}
+		return append(evts, land(state, player, newPos, noModifier)...)
 
 	case models.CardEffectRepairsPerBuilding:
-		houses, hotels := sumBuildings(state, playerID)
-		cost := houses*card.HouseCost + hotels*card.HotelCost
-		player.Money -= cost
+		houses, hotels := sumBuildings(state, pid)
+		return charge(state, pid, bank, houses*card.HouseCost+hotels*card.HotelCost, reason)
 
 	case models.CardEffectCollectFromPlayers:
-		for i := range state.Players {
-			if state.Players[i].PlayerID != playerID && !state.Players[i].IsBankrupt {
-				state.Players[i].Money -= card.Amount
-				player.Money += card.Amount
-			}
+		var evts []events.Event
+		for _, other := range otherActivePlayers(state, pid) {
+			evts = append(evts, charge(state, other, pid, card.Amount, reason)...)
 		}
+		return evts
 
 	case models.CardEffectPayToPlayers:
-		for i := range state.Players {
-			if state.Players[i].PlayerID != playerID && !state.Players[i].IsBankrupt {
-				state.Players[i].Money += card.Amount
-				player.Money -= card.Amount
-			}
+		var evts []events.Event
+		for _, other := range otherActivePlayers(state, pid) {
+			evts = append(evts, charge(state, pid, other, card.Amount, reason)...)
 		}
+		return evts
 
 	case models.CardEffectMoveToNearestRailroad:
 		nearest := findNearestRailroad(player.Position)
-		oldPos := player.Position
-		if nearest < oldPos {
-			player.Money += 200
-			evts = append(evts, &events.PassedGoEvent{
-				BaseEvent: events.BaseEvent{Type: events.EventPassedGo},
-				PlayerID:  playerID,
-				Amount:    200,
-			})
+		mod := rentModifier{railroadMultiplier: 1}
+		if card.DoubleTax {
+			mod.railroadMultiplier = 2
 		}
-		player.Position = nearest
-		evts = append(evts, &events.PlayerMovedEvent{
-			BaseEvent:    events.BaseEvent{Type: events.EventPlayerMoved},
-			PlayerID:     playerID,
-			FromPosition: oldPos,
-			ToPosition:   nearest,
-		})
-		landEvts := handleLanding(state, playerID, nearest, 0)
-		evts = append(evts, landEvts...)
+		return moveTo(state, player, nearest, nearest < player.Position, mod)
 
 	case models.CardEffectMoveToNearestUtility:
 		nearest := findNearestUtility(player.Position)
-		oldPos := player.Position
-		if nearest < oldPos {
-			player.Money += 200
-			evts = append(evts, &events.PassedGoEvent{
-				BaseEvent: events.BaseEvent{Type: events.EventPassedGo},
-				PlayerID:  playerID,
-				Amount:    200,
-			})
-		}
-		player.Position = nearest
-		evts = append(evts, &events.PlayerMovedEvent{
-			BaseEvent:    events.BaseEvent{Type: events.EventPlayerMoved},
-			PlayerID:     playerID,
-			FromPosition: oldPos,
-			ToPosition:   nearest,
-		})
-		landEvts := handleLanding(state, playerID, nearest, 0)
-		evts = append(evts, landEvts...)
+		return moveTo(state, player, nearest, nearest < player.Position, rentModifier{utilityFactor: 10})
 	}
 
-	return evts
+	return nil
+}
+
+func otherActivePlayers(state *models.GameState, except uuid.UUID) []uuid.UUID {
+	var ids []uuid.UUID
+	for _, p := range state.Players {
+		if p.PlayerID != except && !p.IsBankrupt {
+			ids = append(ids, p.PlayerID)
+		}
+	}
+	return ids
 }
 
 func findNearestRailroad(fromPos int) int {
@@ -463,9 +356,13 @@ func findNearestUtility(fromPos int) int {
 // phaseAfterResolution returns the phase once the current landing/action is resolved:
 // a player who rolled doubles (and is still free) rolls again, otherwise the turn may end.
 func phaseAfterResolution(state *models.GameState) models.TurnPhase {
+	if state.Turn.DiceRoll == nil {
+		// The active player has not rolled yet (e.g. the turn passed after a bankruptcy).
+		return models.TurnPhasePreRoll
+	}
 	player := findPlayer(state, state.Turn.ActivePlayerID)
 	if player != nil && !player.IsInJail && !player.IsBankrupt &&
-		state.Turn.DiceRoll != nil && state.Turn.DiceRoll.IsDoubles() && state.Turn.DoublesCount > 0 {
+		state.Turn.DiceRoll.IsDoubles() && state.Turn.DoublesCount > 0 {
 		return models.TurnPhasePreRoll
 	}
 	return models.TurnPhaseEnd

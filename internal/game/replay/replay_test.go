@@ -8,7 +8,6 @@ import (
 	"github/M2A96/Monopoly.git/internal/game/commands"
 	"github/M2A96/Monopoly.git/internal/game/models"
 	"github/M2A96/Monopoly.git/internal/game/replay"
-	"github/M2A96/Monopoly.git/pkg/dice"
 )
 
 var (
@@ -30,52 +29,11 @@ func emptyState() models.GameState {
 	return models.GameState{Ownerships: make(map[int]models.Ownership)}
 }
 
-// playScript records a game driven by a seeded dice provider, the way the runtime will:
-// randomness is generated outside the reducer and injected into RollDice commands.
+// playScript records a bot-driven game: randomness comes from a seeded dice provider
+// outside the reducer and is injected into RollDice commands.
 func playScript(t *testing.T, seed int64, turns int) []commands.Command {
 	t.Helper()
-	provider := dice.NewProvider(seed)
-	cmds := setupCommands()
-
-	state, err := replay.Replay(emptyState(), cmds)
-	if err != nil {
-		t.Fatalf("setup: %v", err)
-	}
-	cur := state.FinalState
-
-	step := func(cmd commands.Command) bool {
-		next, err := replay.Replay(cur, []commands.Command{cmd})
-		if err != nil {
-			return false
-		}
-		cur = next.FinalState
-		cmds = append(cmds, cmd)
-		return true
-	}
-
-	for i := 0; i < turns && cur.Status == models.GameStatusActive; i++ {
-		active := cur.Turn.ActivePlayerID
-		base := commands.BaseCommand{GameID: gameID, PlayerID: active}
-		for guard := 0; guard < 10 && cur.Turn.Phase == models.TurnPhasePreRoll && cur.Turn.ActivePlayerID == active; guard++ {
-			d1, d2 := provider.Roll()
-			if !step(&commands.RollDiceCommand{BaseCommand: base, Die1: d1, Die2: d2}) {
-				t.Fatalf("turn %d: roll rejected", i)
-			}
-			if w := cur.Turn.ActionWindow; w != nil && w.Type == models.ActionWaitingForPurchaseDecision {
-				if !step(&commands.BuyPropertyCommand{BaseCommand: base}) {
-					t.Fatalf("turn %d: buy rejected", i)
-				}
-			}
-		}
-		if cur.Turn.Phase != models.TurnPhaseEnd {
-			// e.g. a pending auction (closing auctions is Phase 3); stop the script here.
-			break
-		}
-		if !step(&commands.EndTurnCommand{BaseCommand: base}) {
-			t.Fatalf("turn %d: end turn rejected", i)
-		}
-	}
-	return cmds
+	return playGame(t, seed, setupCommands(), turns*4).cmds
 }
 
 func TestReplayIsDeterministic(t *testing.T) {

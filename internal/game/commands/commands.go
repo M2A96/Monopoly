@@ -25,6 +25,9 @@ const (
 	CommandPayJailFine         CommandType = "PAY_JAIL_FINE"
 	CommandUseGetOutOfJailCard CommandType = "USE_GET_OUT_OF_JAIL_CARD"
 	CommandDeclareBankruptcy   CommandType = "DECLARE_BANKRUPTCY"
+	CommandAuctionPass         CommandType = "AUCTION_PASS"
+	CommandPayDebt             CommandType = "PAY_DEBT"
+	CommandResign              CommandType = "RESIGN"
 )
 
 // Command is the base interface for all player-issued game commands.
@@ -158,6 +161,13 @@ type AuctionBidCommand struct {
 
 func (c AuctionBidCommand) GetType() CommandType { return CommandAuctionBid }
 
+// AuctionPassCommand withdraws the current bidder from the auction.
+type AuctionPassCommand struct {
+	BaseCommand
+}
+
+func (c AuctionPassCommand) GetType() CommandType { return CommandAuctionPass }
+
 // --- Jail ---
 
 type PayJailFineCommand struct {
@@ -179,3 +189,26 @@ type DeclareBankruptcyCommand struct {
 }
 
 func (c DeclareBankruptcyCommand) GetType() CommandType { return CommandDeclareBankruptcy }
+
+// PayDebtCommand pays the issuing player's oldest pending debt in full.
+type PayDebtCommand struct {
+	BaseCommand
+}
+
+func (c PayDebtCommand) GetType() CommandType { return CommandPayDebt }
+
+type ResignReason string
+
+const (
+	ResignVoluntary ResignReason = "VOLUNTARY"
+	// ResignTimeout is issued by the runtime when a player exceeds their turn timer.
+	ResignTimeout ResignReason = "TIMEOUT"
+)
+
+// ResignCommand eliminates the player; their assets return to the bank.
+type ResignCommand struct {
+	BaseCommand
+	Reason ResignReason
+}
+
+func (c ResignCommand) GetType() CommandType { return CommandResign }
