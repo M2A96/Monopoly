@@ -123,49 +123,7 @@ func calculateRent(spaceIndex int, diceTotal int, state *models.GameState, owner
 }
 
 func copyState(state models.GameState) models.GameState {
-	cp := state
-	cp.Players = make([]models.PlayerState, len(state.Players))
-	for i := range state.Players {
-		cp.Players[i] = state.Players[i]
-		cp.Players[i].OwnedSpaceIndexes = make([]int, len(state.Players[i].OwnedSpaceIndexes))
-		copy(cp.Players[i].OwnedSpaceIndexes, state.Players[i].OwnedSpaceIndexes)
-		cp.Players[i].PendingActions = make([]models.ActionWindow, len(state.Players[i].PendingActions))
-		copy(cp.Players[i].PendingActions, state.Players[i].PendingActions)
-	}
-	cp.Ownerships = make(map[int]models.Ownership, len(state.Ownerships))
-	for k, v := range state.Ownerships {
-		cp.Ownerships[k] = v
-	}
-	cp.Trades = make([]models.Trade, len(state.Trades))
-	copy(cp.Trades, state.Trades)
-	if state.Debts != nil {
-		cp.Debts = make([]models.Debt, len(state.Debts))
-		copy(cp.Debts, state.Debts)
-	}
-	if state.Auction != nil {
-		a := *state.Auction
-		a.Bids = make(map[uuid.UUID]int, len(state.Auction.Bids))
-		for k, v := range state.Auction.Bids {
-			a.Bids[k] = v
-		}
-		a.Participants = append([]uuid.UUID(nil), state.Auction.Participants...)
-		cp.Auction = &a
-	}
-	if state.Turn.ActionWindow != nil {
-		w := *state.Turn.ActionWindow
-		cp.Turn.ActionWindow = &w
-	}
-	if state.CardDecks.JailCardHolders != nil {
-		cp.CardDecks.JailCardHolders = make(map[string]uuid.UUID, len(state.CardDecks.JailCardHolders))
-		for k, v := range state.CardDecks.JailCardHolders {
-			cp.CardDecks.JailCardHolders[k] = v
-		}
-	}
-	cp.CardDecks.Chance = make([]models.Card, len(state.CardDecks.Chance))
-	copy(cp.CardDecks.Chance, state.CardDecks.Chance)
-	cp.CardDecks.CommunityChest = make([]models.Card, len(state.CardDecks.CommunityChest))
-	copy(cp.CardDecks.CommunityChest, state.CardDecks.CommunityChest)
-	return cp
+	return state.Clone()
 }
 
 func activePlayers(state *models.GameState) int {

@@ -41,3 +41,18 @@ func TestProviderDifferentSeedsDiverge(t *testing.T) {
 	}
 	t.Fatal("different seeds produced 100 identical rolls")
 }
+
+func TestCryptoProviderRollsInRangeAndVaries(t *testing.T) {
+	p := dice.NewCryptoProvider()
+	seen := map[[2]int]bool{}
+	for i := 0; i < 1000; i++ {
+		d1, d2 := p.Roll()
+		if d1 < 1 || d1 > 6 || d2 < 1 || d2 > 6 {
+			t.Fatalf("roll %d out of range: (%d,%d)", i, d1, d2)
+		}
+		seen[[2]int{d1, d2}] = true
+	}
+	if len(seen) < 30 {
+		t.Fatalf("expected most of the 36 outcomes in 1000 rolls, saw %d", len(seen))
+	}
+}
